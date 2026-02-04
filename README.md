@@ -22,7 +22,7 @@ hookが提供されているので、スクレイピング時に用意したス�
 
 ### すべての情報を可視化
 
-[demoページ](TODO)を参考。予算機能以外はすべて対応済み。
+[demoページ](https://hiroppy.github.io/mf-dashboard/accounts/)を参考。予算機能以外はすべて対応済み。
 
 <img src="./.github/assets/demo-month.png" alt="month page" width="50%" /><img src="./.github/assets/demo-dashboard.png" alt="dashboard page" width="50%" />
 
