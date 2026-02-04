@@ -9,6 +9,11 @@ if (existsSync(rootEnvPath)) {
   loadEnvFile(rootEnvPath);
 }
 
+const isGitHubPages = process.env.GITHUB_PAGES === "true";
+const basePath = isGitHubPages
+  ? `/${process.env.NEXT_PUBLIC_GITHUB_REPO}`
+  : undefined;
+
 const nextConfig: NextConfig = {
   output: "export",
   typedRoutes: true,
@@ -20,6 +25,7 @@ const nextConfig: NextConfig = {
   experimental: {
     typedEnv: true,
   },
+  basePath,
 };
 
 export default nextConfig;

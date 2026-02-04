@@ -43,6 +43,7 @@ jobs:
         run: pnpm build:demo
         env:
           DB_PATH: ${{ github.workspace }}/data/demo.db
+          GITHUB_PAGES: "true"
           NEXT_PUBLIC_GITHUB_ORG: ${{ github.repository_owner }}
           NEXT_PUBLIC_GITHUB_REPO: ${{ github.event.repository.name }}
       - name: Build Storybook
