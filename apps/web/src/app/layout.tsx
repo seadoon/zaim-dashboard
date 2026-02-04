@@ -8,7 +8,15 @@ import { Header } from "../components/layout/header";
 import { Sidebar } from "../components/layout/sidebar";
 import { SidebarProvider } from "../components/layout/sidebar-context";
 
+const metadataBase =
+  process.env.GITHUB_PAGES === "true"
+    ? new URL(
+        `https://${process.env.NEXT_PUBLIC_GITHUB_ORG}.github.io/${process.env.NEXT_PUBLIC_GITHUB_REPO}/`,
+      )
+    : undefined;
+
 export const metadata: Metadata = {
+  metadataBase,
   title: {
     template: "%s | MoneyForward Me Dashboard",
     default: "MoneyForward Me Dashboard",
@@ -21,7 +29,7 @@ export const metadata: Metadata = {
     locale: "ja_JP",
     images: [
       {
-        url: "/logo.png",
+        url: "logo.png",
         width: 758,
         height: 708,
         alt: "MoneyForward Me Dashboard",
@@ -32,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "MoneyForward Me Dashboard",
     description: "MoneyForward Me のデータを可視化するダッシュボード",
-    images: ["/logo.png"],
+    images: ["logo.png"],
   },
 };
 
