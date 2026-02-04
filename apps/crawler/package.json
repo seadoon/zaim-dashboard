@@ -1,0 +1,38 @@
+{
+  "name": "@moneyforward-daily-action/crawler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./auth/login": "./src/auth/login.ts",
+    "./auth/state": "./src/auth/state.ts",
+    "./browser/context": "./src/browser/context.ts",
+    "./scrapers/group": "./src/scrapers/group.ts",
+    "./scrapers/cash-flow-history": "./src/scrapers/cash-flow-history.ts",
+    "./scrapers/monthly-summary": "./src/scrapers/monthly-summary.ts",
+    "./scrapers/portfolio": "./src/scrapers/portfolio.ts",
+    "./scrapers/liabilities": "./src/scrapers/liabilities.ts"
+  },
+  "scripts": {
+    "dev:scrape": "DEBUG=true SKIP_REFRESH=true tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run --project unit",
+    "test:e2e": "vitest run --project e2e",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@1password/sdk": "0.3.1",
+    "@moneyforward-daily-action/db": "workspace:*",
+    "@moneyforward-daily-action/meta": "workspace:*",
+    "@slack/web-api": "7.13.0",
+    "better-sqlite3": "catalog:",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "catalog:",
+    "@types/node": "catalog:",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

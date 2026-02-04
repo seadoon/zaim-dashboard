@@ -1,0 +1,40 @@
+{
+  "name": "@moneyforward-daily-action/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/schema.ts",
+    "./repository/save-scraped-data": "./src/repositories/save-scraped-data.ts",
+    "./repository/transactions": "./src/repositories/transactions.ts",
+    "./repository/summaries": "./src/repositories/summaries.ts",
+    "./repository/accounts": "./src/repositories/accounts.ts",
+    "./repository/groups": "./src/repositories/groups.ts",
+    "./repository/categories": "./src/repositories/categories.ts",
+    "./repository/institution-categories": "./src/repositories/institution-categories.ts",
+    "./repository/snapshots": "./src/repositories/snapshots.ts",
+    "./repository/holdings": "./src/repositories/holdings.ts",
+    "./repository/spending-targets": "./src/repositories/spending-targets.ts",
+    "./types": "./src/types.ts",
+    "./utils": "./src/utils.ts",
+    "./test-helpers": "./src/test-helpers.ts"
+  },
+  "scripts": {
+    "build:demo": "DB_PATH=../../data/demo.db tsx src/seed.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "better-sqlite3": "catalog:",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "catalog:",
+    "@types/node": "catalog:",
+    "drizzle-kit": "0.31.8",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

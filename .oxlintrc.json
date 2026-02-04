@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "nextjs", "import", "node", "jsx-a11y", "vitest"],
+  "rules": {
+    "no-console": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ],
+  "settings": {
+    "next": {
+      "rootDir": "apps/web/"
+    }
+  },
+  "ignorePatterns": ["data/", "debug/", ".next/", "dist/", "out/", "drizzle/", "storybook-static/"]
+}

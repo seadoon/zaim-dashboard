@@ -1,0 +1,103 @@
+"use client";
+
+import { ChevronsUpDown } from "lucide-react";
+import { useState } from "react";
+import { Button } from "./button";
+import { Checkbox } from "./checkbox";
+import { Command, CommandGroup, CommandItem, CommandList } from "./command";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+
+interface MultiSelectFilterProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  getLabel?: (option: string) => string;
+}
+
+export function MultiSelectFilter({
+  label,
+  options,
+  selected,
+  onChange,
+  getLabel,
+}: MultiSelectFilterProps) {
+  const displayLabel = (option: string) => (getLabel ? getLabel(option) : option);
+  const [open, setOpen] = useState(false);
+
+  const handleToggle = (value: string) => {
+    const newSelected = selected.includes(value)
+      ? selected.filter((item) => item !== value)
+      : [...selected, value];
+    onChange(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    onChange(options);
+  };
+
+  const handleClearAll = () => {
+    onChange([]);
+  };
+
+  const buttonLabel = selected.length > 0 ? `${label} (${selected.length})` : label;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="multi-select-listbox"
+          aria-label={buttonLabel}
+          className="w-full justify-between sm:w-auto"
+        >
+          {buttonLabel}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--anchor-width)] p-0 sm:w-[280px]" align="end">
+        <Command>
+          <CommandList id="multi-select-listbox">
+            <CommandGroup>
+              <div className="flex gap-2 p-2 border-b">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="flex-1 h-8 text-xs"
+                >
+                  すべて選択
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearAll}
+                  className="flex-1 h-8 text-xs"
+                >
+                  すべて解除
+                </Button>
+              </div>
+              {options.map((option) => (
+                <CommandItem
+                  key={option}
+                  value={option}
+                  onSelect={() => handleToggle(option)}
+                  className="cursor-pointer"
+                >
+                  <Checkbox
+                    checked={selected.includes(option)}
+                    className="mr-2"
+                    aria-label={`${displayLabel(option)}を選択`}
+                  />
+                  {displayLabel(option)}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}

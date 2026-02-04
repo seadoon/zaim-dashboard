@@ -1,0 +1,403 @@
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import type { Transaction } from "./types";
+import { useTransactionFiltering } from "./use-transaction-filtering";
+
+const createTransaction = (overrides: Partial<Transaction> = {}): Transaction => ({
+  id: 1,
+  date: "2025-04-15",
+  category: "食費",
+  description: "ランチ",
+  amount: 1000,
+  type: "expense",
+  isTransfer: false,
+  isExcludedFromCalculation: false,
+  accountName: "銀行A",
+  ...overrides,
+});
+
+const sampleTransactions: Transaction[] = [
+  createTransaction({
+    id: 1,
+    category: "食費",
+    type: "expense",
+    amount: 1000,
+    accountName: "銀行A",
+  }),
+  createTransaction({
+    id: 2,
+    category: "食費",
+    type: "expense",
+    amount: 2000,
+    accountName: "銀行A",
+  }),
+  createTransaction({
+    id: 3,
+    category: "交通費",
+    type: "expense",
+    amount: 500,
+    accountName: "銀行B",
+  }),
+  createTransaction({
+    id: 4,
+    category: "給与",
+    type: "income",
+    amount: 300000,
+    accountName: "銀行A",
+  }),
+  createTransaction({
+    id: 5,
+    category: null,
+    type: "transfer",
+    amount: 10000,
+    accountName: null,
+    isTransfer: true,
+  }),
+];
+
+describe("useTransactionFiltering", () => {
+  const defaultOptions = {
+    transactions: sampleTransactions,
+    selectedDate: null,
+    pageSize: 10,
+  };
+
+  describe("初期状態", () => {
+    it("フィルタが初期値で設定される", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      expect(result.current.searchText).toBe("");
+      expect(result.current.selectedCategories).toEqual([]);
+      expect(result.current.selectedTypes).toEqual([]);
+      expect(result.current.selectedAccounts).toEqual([]);
+      expect(result.current.currentPage).toBe(0);
+      expect(result.current.sortColumn).toBe("date");
+      expect(result.current.sortDirection).toBe("desc");
+    });
+
+    it("全トランザクションが表示される", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(5);
+    });
+
+    it("カテゴリ一覧がカウント順でソートされる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      // 食費が2件で最も多い
+      expect(result.current.categories[0]).toBe("食費");
+      expect(result.current.categoryCount.get("食費")).toBe(2);
+    });
+
+    it("typeOptionsが定義されている", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      expect(result.current.typeOptions).toEqual(["income", "expense", "transfer"]);
+    });
+  });
+
+  describe("KPI計算", () => {
+    it("収入と支出の合計を計算する", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      expect(result.current.kpi.totalIncome).toBe(300000);
+      expect(result.current.kpi.totalExpense).toBe(3500); // 1000 + 2000 + 500
+      expect(result.current.kpi.balance).toBe(296500);
+    });
+
+    it("支出の中央値を計算する", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      // 支出: 500, 1000, 2000 -> 中央値: 1000
+      expect(result.current.kpi.medianExpense).toBe(1000);
+    });
+
+    it("transferはKPIから除外される", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      // count: income 1件 + expense 3件 = 4件（transferは除外）
+      expect(result.current.kpi.count).toBe(4);
+    });
+
+    it("isExcludedFromCalculation=trueのトランザクションはKPIから除外される", () => {
+      const transactions = [
+        createTransaction({
+          id: 1,
+          type: "expense",
+          amount: 1000,
+          isExcludedFromCalculation: false,
+        }),
+        createTransaction({
+          id: 2,
+          type: "expense",
+          amount: 2000,
+          isExcludedFromCalculation: true,
+        }),
+      ];
+      const { result } = renderHook(() =>
+        useTransactionFiltering({ ...defaultOptions, transactions }),
+      );
+
+      expect(result.current.kpi.totalExpense).toBe(1000);
+      expect(result.current.kpi.count).toBe(1);
+    });
+  });
+
+  describe("検索フィルタ", () => {
+    it("説明文で検索できる", () => {
+      const transactions = [
+        createTransaction({ id: 1, description: "ランチ代" }),
+        createTransaction({ id: 2, description: "ディナー" }),
+      ];
+      const { result } = renderHook(() =>
+        useTransactionFiltering({ ...defaultOptions, transactions }),
+      );
+
+      act(() => {
+        result.current.handleSearchChange("ランチ");
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(1);
+      expect(result.current.filteredAndSortedTransactions[0].description).toBe("ランチ代");
+    });
+
+    it("カテゴリ名で検索できる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleSearchChange("食費");
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(2);
+    });
+
+    it("検索時にページがリセットされる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.setCurrentPage(2);
+      });
+      expect(result.current.currentPage).toBe(2);
+
+      act(() => {
+        result.current.handleSearchChange("test");
+      });
+      expect(result.current.currentPage).toBe(0);
+    });
+  });
+
+  describe("カテゴリフィルタ", () => {
+    it("カテゴリでフィルタできる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleCategoriesChange(["食費"]);
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(2);
+      expect(result.current.selectedCategories).toEqual(["食費"]);
+    });
+
+    it("複数カテゴリでOR検索できる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleCategoriesChange(["食費", "交通費"]);
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(3);
+    });
+
+    it("カテゴリを削除できる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleCategoriesChange(["食費", "交通費"]);
+      });
+
+      act(() => {
+        result.current.handleRemoveCategory("食費");
+      });
+
+      expect(result.current.selectedCategories).toEqual(["交通費"]);
+    });
+
+    it("nullカテゴリは「振替」として扱われる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleCategoriesChange(["振替"]);
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(1);
+      expect(result.current.filteredAndSortedTransactions[0].category).toBeNull();
+    });
+  });
+
+  describe("タイプフィルタ", () => {
+    it("タイプでフィルタできる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleTypesChange(["income"]);
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(1);
+      expect(result.current.filteredAndSortedTransactions[0].type).toBe("income");
+    });
+
+    it("タイプを削除できる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleTypesChange(["income", "expense"]);
+      });
+
+      act(() => {
+        result.current.handleRemoveType("income");
+      });
+
+      expect(result.current.selectedTypes).toEqual(["expense"]);
+    });
+  });
+
+  describe("アカウントフィルタ", () => {
+    it("アカウントでフィルタできる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleAccountsChange(["銀行A"]);
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(3);
+    });
+
+    it("アカウントを削除できる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleAccountsChange(["銀行A", "銀行B"]);
+      });
+
+      act(() => {
+        result.current.handleRemoveAccount("銀行A");
+      });
+
+      expect(result.current.selectedAccounts).toEqual(["銀行B"]);
+    });
+  });
+
+  describe("ソート", () => {
+    it("同じカラムをクリックすると方向が反転する", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      expect(result.current.sortDirection).toBe("desc");
+
+      act(() => {
+        result.current.handleSort("date");
+      });
+
+      expect(result.current.sortDirection).toBe("asc");
+    });
+
+    it("別のカラムをクリックするとdescでソートされる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleSort("amount");
+      });
+
+      expect(result.current.sortColumn).toBe("amount");
+      expect(result.current.sortDirection).toBe("desc");
+    });
+
+    it("ソート時にページがリセットされる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.setCurrentPage(2);
+      });
+
+      act(() => {
+        result.current.handleSort("amount");
+      });
+
+      expect(result.current.currentPage).toBe(0);
+    });
+  });
+
+  describe("ページネーション", () => {
+    it("totalPagesが正しく計算される", () => {
+      const transactions = Array.from({ length: 25 }, (_, i) => createTransaction({ id: i + 1 }));
+      const { result } = renderHook(() =>
+        useTransactionFiltering({ ...defaultOptions, transactions, pageSize: 10 }),
+      );
+
+      expect(result.current.totalPages).toBe(3);
+    });
+
+    it("paginatedTransactionsが正しいページのデータを返す", () => {
+      const transactions = Array.from({ length: 25 }, (_, i) => createTransaction({ id: i + 1 }));
+      const { result } = renderHook(() =>
+        useTransactionFiltering({ ...defaultOptions, transactions, pageSize: 10 }),
+      );
+
+      expect(result.current.paginatedTransactions).toHaveLength(10);
+
+      act(() => {
+        result.current.setCurrentPage(2);
+      });
+
+      expect(result.current.paginatedTransactions).toHaveLength(5);
+    });
+  });
+
+  describe("フィルタクリア", () => {
+    it("全てのフィルタをクリアできる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleCategoriesChange(["食費"]);
+        result.current.handleTypesChange(["expense"]);
+        result.current.handleAccountsChange(["銀行A"]);
+        result.current.setCurrentPage(1);
+      });
+
+      act(() => {
+        result.current.handleClearFilters();
+      });
+
+      expect(result.current.selectedCategories).toEqual([]);
+      expect(result.current.selectedTypes).toEqual([]);
+      expect(result.current.selectedAccounts).toEqual([]);
+      expect(result.current.currentPage).toBe(0);
+    });
+
+    it("日付変更コールバックが呼ばれる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+      let dateValue: string | null = "2025-04-15";
+
+      act(() => {
+        result.current.handleClearFilters((date) => {
+          dateValue = date;
+        });
+      });
+
+      expect(dateValue).toBeNull();
+    });
+  });
+
+  describe("複合フィルタ", () => {
+    it("複数のフィルタを組み合わせてAND検索できる", () => {
+      const { result } = renderHook(() => useTransactionFiltering(defaultOptions));
+
+      act(() => {
+        result.current.handleCategoriesChange(["食費"]);
+        result.current.handleTypesChange(["expense"]);
+        result.current.handleAccountsChange(["銀行A"]);
+      });
+
+      expect(result.current.filteredAndSortedTransactions).toHaveLength(2);
+    });
+  });
+});

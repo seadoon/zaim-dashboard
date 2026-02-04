@@ -1,0 +1,32 @@
+{
+  "name": "moneyforward-daily-action",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "corepack enable pnpm",
+    "dev": "turbo dev",
+    "dev:demo": "turbo dev:demo",
+    "build": "turbo build",
+    "build:demo": "turbo build:demo",
+    "db:clean": "rm -f data/moneyforward.db data/moneyforward.db-wal data/moneyforward.db-shm",
+    "db:dev": "pnpm --filter @moneyforward-daily-action/crawler dev:scrape",
+    "test": "turbo test",
+    "test:e2e:web": "turbo test:e2e --filter=@moneyforward-daily-action/web",
+    "test:e2e:crawler": "turbo test:e2e --filter=@moneyforward-daily-action/crawler",
+    "test:e2e:real": "pnpm --filter @moneyforward-daily-action/db-e2e test",
+    "typecheck": "turbo typecheck",
+    "lint": "oxlint --type-aware --fix",
+    "format": "oxfmt",
+    "knip": "knip"
+  },
+  "devDependencies": {
+    "knip": "5.83.0",
+    "lefthook": "2.1.0",
+    "oxfmt": "0.28.0",
+    "oxlint": "1.43.0",
+    "oxlint-tsgolint": "0.11.4",
+    "tsx": "4.21.0",
+    "turbo": "2.8.3"
+  },
+  "packageManager": "pnpm@10.28.2"
+}

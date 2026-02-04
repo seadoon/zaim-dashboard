@@ -1,0 +1,30 @@
+import { getAllGroups, getCurrentGroup } from "@moneyforward-daily-action/db";
+import { GroupSelectorDisplay, groupSelectorContainerClassName } from "./group-selector-display";
+import { GroupSelectorClient } from "./group-selector.client";
+
+export function GroupSelector() {
+  const groups = getAllGroups();
+  const currentGroup = getCurrentGroup();
+
+  if (groups.length <= 1) {
+    return currentGroup ? (
+      <div className={groupSelectorContainerClassName}>
+        <GroupSelectorDisplay name={currentGroup.name} lastScrapedAt={currentGroup.lastScrapedAt} />
+      </div>
+    ) : null;
+  }
+
+  const defaultGroupId = currentGroup?.id ?? groups[0].id;
+
+  return (
+    <GroupSelectorClient
+      groups={groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        isCurrent: g.isCurrent ?? false,
+        lastScrapedAt: g.lastScrapedAt,
+      }))}
+      defaultGroupId={defaultGroupId}
+    />
+  );
+}

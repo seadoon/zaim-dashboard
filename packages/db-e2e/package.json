@@ -1,0 +1,20 @@
+{
+  "name": "@moneyforward-daily-action/db-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:real": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moneyforward-daily-action/crawler": "workspace:*",
+    "@moneyforward-daily-action/db": "workspace:*",
+    "playwright": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

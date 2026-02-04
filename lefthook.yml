@@ -1,0 +1,24 @@
+pre-commit:
+  commands:
+    format:
+      glob: "*.{ts,tsx,js,jsx,json,css,yml,yaml,md}"
+      run: pnpm oxfmt {staged_files}
+      stage_fixed: true
+    lint:
+      glob: "*.{ts,tsx,js,jsx}"
+      run: pnpm oxlint --type-aware --fix {staged_files}
+      stage_fixed: true
+    knip:
+      glob: "*.{ts,tsx,js,jsx}"
+      run: pnpm knip --fix
+      stage_fixed: true
+
+post-merge:
+  commands:
+    clean-wal:
+      run: rm -f data/*.db-shm data/*.db-wal
+
+post-checkout:
+  commands:
+    clean-wal:
+      run: rm -f data/*.db-shm data/*.db-wal

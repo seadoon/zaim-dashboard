@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme {
+  /* === Base theme === */
+  --color-background: oklch(0.98 0.005 230);
+  --color-foreground: oklch(0.18 0.02 230);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.18 0.02 230);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.18 0.02 230);
+  --color-primary: oklch(0.53 0.15 230);
+  --color-primary-foreground: oklch(1 0 0);
+  --color-secondary: oklch(0.96 0.01 230);
+  --color-secondary-foreground: oklch(0.25 0.02 230);
+  --color-muted: oklch(0.96 0.01 230);
+  --color-muted-foreground: oklch(0.5 0.02 230);
+  --color-accent: oklch(0.92 0.04 230);
+  --color-accent-foreground: oklch(0.25 0.02 230);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
+  --color-border: oklch(0.91 0.02 230);
+  --color-input: oklch(0.91 0.02 230);
+  --color-ring: oklch(0.53 0.15 230);
+
+  /* === Radius === */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* === Chart palette (generic) === */
+  --color-chart-1: oklch(0.53 0.15 230);
+  --color-chart-2: oklch(0.65 0.18 145);
+  --color-chart-3: oklch(0.7 0.18 45);
+  --color-chart-4: oklch(0.6 0.2 25);
+  --color-chart-5: oklch(0.6 0.2 300);
+
+  /* === Semantic colors (income/expense/balance) === */
+  --color-income: #256a82;
+  --color-expense: #b91c1c;
+  --color-balance-positive: #146e35;
+  --color-balance-negative: #9c3f00;
+
+  /* === Badge status colors === */
+  --color-success: #15803d;
+  --color-success-foreground: #ffffff;
+  --color-warning: #fef3c7;
+  --color-warning-foreground: #92400e;
+  --color-transfer: #6b7280;
+  --color-total-assets: #217cba;
+  --color-liability: #92400e;
+  --color-net-assets: #15803d;
+  --color-expense-fixed: #3b82f6;
+  --color-expense-variable: #f59e0b;
+
+  /* === Asset category colors === */
+  --color-asset-deposit: #0e7490; /* 本家: #2881d7 */
+  --color-asset-stock: #dd3121; /* 本家: #df3727 */
+  --color-asset-fund: #c45505; /* 本家: #fcad4c */
+  --color-asset-insurance: #be185d; /* 本家: #ff689a */
+  --color-asset-pension: #008381; /* 本家: #008986 */
+  --color-asset-point: #9c39b6;
+
+  /* === Expense category colors === */
+  --color-cat-cash-card: #a6662e; /* 本家: #d3955f */
+  --color-cat-housing: #5c5280; /* 本家: #349f76 */
+  --color-cat-utility: #1e7ea2; /* 本家: #2eaad9 */
+  --color-cat-communication: #8a49b5;
+  --color-cat-automobile: #4c4e51;
+  --color-cat-tax: #92400e; /* 本家: #e8cbab */
+  --color-cat-daily: #3f824e; /* 本家: #83c391 */
+  --color-cat-food: #db343a; /* 本家: #df4c52 */
+  --color-cat-education: #5972b9; /* 本家: #6f85c2 */
+  --color-cat-entertainment: #e11b65; /* 本家: #eb588f */
+  --color-cat-clothing: #a86504; /* 本家: #fbb44c */
+  --color-cat-health: #0f766e; /* 本家: #fd8a6a */
+  --color-cat-special: #667d3c; /* 本家: #adc383 */
+  --color-cat-other: #7b746c; /* 本家: #bdb9b4 */
+  --color-cat-transport: #4b4560;
+  --color-cat-social: #4975b5;
+
+  /* === Income / uncategorized === */
+  --color-cat-income: #2d7893;
+  --color-cat-uncategorized: #b45e01; /* 本家: #fe9626 */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Roboto,
+      sans-serif;
+  }
+}
+
+/* Mobile navigation animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}

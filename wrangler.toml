@@ -1,0 +1,5 @@
+name = "mf-dashboard"
+compatibility_date = "2026-01-28"
+
+[assets]
+directory = "./apps/web/out"

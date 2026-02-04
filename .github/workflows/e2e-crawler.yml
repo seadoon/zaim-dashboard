@@ -1,0 +1,61 @@
+name: Crawler E2E Tests
+
+on:
+  schedule:
+    # JST 12:00 (UTC 03:00)
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: "e2e-crawler"
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - id: check
+        env:
+          OP_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          SHOULD_RUN: ${{ vars.SHOULD_RUN_CRAWLER_E2E }}
+        run: echo "should-run=${{ env.OP_TOKEN != '' && env.SHOULD_RUN == 'true' }}" >> $GITHUB_OUTPUT
+  e2e:
+    needs: check
+    if: needs.check.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - name: Run e2e tests
+        run: pnpm --filter @moneyforward-daily-action/crawler test:e2e
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          OP_VAULT: ${{ secrets.OP_VAULT }}
+          OP_ITEM: ${{ secrets.OP_ITEM }}
+          OP_TOTP_FIELD: ${{ secrets.OP_TOTP_FIELD }}
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-screenshots
+          path: apps/crawler/tests/e2e/screenshots/
+          if-no-files-found: ignore
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: "🔴 Crawler E2E テストが失敗しました"
+            blocks:
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: |
+                    *🔴 Crawler E2E テストが失敗しました*
+
+                    <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|ワークフローを確認>

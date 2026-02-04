@@ -1,0 +1,17 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "oxc.fmt.configPath": ".oxfmtrc.json",
+  "oxc.unusedDisableDirectives": "deny",
+  "[json][jsonc][typescript][typescriptreact][javascript][javascriptreact]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit"
+  },
+  "cSpell.enabled": true,
+  "cSpell.words": ["clsx", "vitest", "knip", "oxfmt", "oxlint"],
+  "cSpell.allowCompoundWords": true,
+  "cSpell.ignorePaths": ["**/node_modules/**"]
+}
