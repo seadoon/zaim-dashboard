@@ -35,6 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/auth-state-cache
+        with:
+          mode: restore
+          enabled: ${{ vars.CACHE_AUTH_STATE }}
       - run: pnpm --filter @moneyforward-daily-action/crawler start
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
@@ -44,6 +48,11 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+      - uses: ./.github/actions/auth-state-cache
+        if: always()
+        with:
+          mode: save
+          enabled: ${{ vars.CACHE_AUTH_STATE }}
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

@@ -70,9 +70,10 @@ Cloudflare OneにIdentity Providerの登録(`/integrations/identity-providers`)�
 
 ### Variables
 
-| Key      | Required | Value | Why                 |
-| -------- | -------- | ----- | ------------------- |
-| RUN_TASK | ✅       | true  | crontabの実行に必要 |
+| Key              | Required | Value | Why                                            |
+| ---------------- | -------- | ----- | ---------------------------------------------- |
+| RUN_TASK         | ✅       | true  | crontabの実行に必要                            |
+| CACHE_AUTH_STATE |          | true  | 認証状態をキャッシュし毎回のログインをスキップ |
 
 ### Secrets
 
