@@ -330,7 +330,7 @@ const PRODUCT_PRESETS = [
     label: "S&P 500",
     annualReturnRate: 10,
     expenseRatio: 0.0814,
-    volatility: 17,
+    volatility: 18,
   },
   {
     value: "qqq",
@@ -342,14 +342,14 @@ const PRODUCT_PRESETS = [
   {
     value: "nikkei225",
     label: "日経平均",
-    annualReturnRate: 8,
+    annualReturnRate: 7.5,
     expenseRatio: 0.143,
     volatility: 20,
   },
   {
     value: "topix",
     label: "TOPIX",
-    annualReturnRate: 7,
+    annualReturnRate: 6,
     expenseRatio: 0.143,
     volatility: 18,
   },
