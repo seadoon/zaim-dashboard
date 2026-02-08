@@ -4,6 +4,7 @@ import { WalletIcon } from "lucide-react";
 import { AmountDisplay } from "../ui/amount-display";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { EmptyState } from "../ui/empty-state";
+import { MetricLabel } from "../ui/metric-label";
 
 interface AccountSummaryCardProps {
   mfId: string;
@@ -32,14 +33,14 @@ export function AccountSummaryCard({ mfId, groupId }: AccountSummaryCardProps) {
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
-            <div className="text-sm text-muted-foreground">総資産</div>
+            <MetricLabel title="総資産" />
             <div>
               <AmountDisplay amount={account.totalAssets} size="2xl" weight="bold" />
             </div>
           </div>
           {holdingsTotal > 0 && (
             <div>
-              <div className="text-sm text-muted-foreground">保有資産</div>
+              <MetricLabel title="保有資産" />
               <div>
                 <AmountDisplay amount={holdingsTotal} size="xl" weight="semibold" />
               </div>
@@ -47,7 +48,7 @@ export function AccountSummaryCard({ mfId, groupId }: AccountSummaryCardProps) {
           )}
           {liabilitiesTotal > 0 && (
             <div>
-              <div className="text-sm text-muted-foreground">負債</div>
+              <MetricLabel title="負債" />
               <div>
                 <AmountDisplay
                   amount={-liabilitiesTotal}

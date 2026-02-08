@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { TreemapChart } from "../charts/treemap-chart";
 import { AmountDisplay } from "../ui/amount-display";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { MetricLabel } from "../ui/metric-label";
 import { Select } from "../ui/select";
 
 interface HoldingData {
@@ -129,7 +130,7 @@ export function UnrealizedGainCardClient({
         {/* Summary row */}
         <div className="grid grid-cols-3 gap-4 text-xs sm:text-sm">
           <div>
-            <span className="text-muted-foreground block">含み損益合計</span>
+            <MetricLabel title="含み損益合計" className="text-xs sm:text-sm" />
             <AmountDisplay
               amount={totalGain}
               type="balance"
@@ -139,11 +140,11 @@ export function UnrealizedGainCardClient({
             />
           </div>
           <div>
-            <span className="text-muted-foreground block">評価額合計</span>
+            <MetricLabel title="評価額合計" className="text-xs sm:text-sm" />
             <AmountDisplay amount={totalMarketValue} size="lg" className="text-base sm:text-lg" />
           </div>
           <div>
-            <span className="text-muted-foreground block">取得価額合計</span>
+            <MetricLabel title="取得価額合計" className="text-xs sm:text-sm" />
             <AmountDisplay amount={totalCostBasis} size="lg" className="text-base sm:text-lg" />
           </div>
         </div>

@@ -119,3 +119,9 @@
     transform: translateX(0);
   }
 }
+
+@keyframes grow-bar {
+  from {
+    transform: scaleX(0);
+  }
+}

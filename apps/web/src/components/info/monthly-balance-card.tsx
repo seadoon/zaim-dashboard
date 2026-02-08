@@ -5,6 +5,7 @@ import { formatDateShort } from "../../lib/format";
 import { AmountDisplay } from "../ui/amount-display";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { EmptyState } from "../ui/empty-state";
+import { MetricLabel } from "../ui/metric-label";
 
 interface MonthlyBalanceCardProps {
   className?: string;
@@ -32,15 +33,15 @@ export function MonthlyBalanceCard({ className, groupId }: MonthlyBalanceCardPro
       </CardHeader>
       <CardContent className="space-y-1">
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">収入</span>
+          <MetricLabel title="収入" />
           <AmountDisplay amount={totalIncome} type="income" size="sm" />
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">支出</span>
+          <MetricLabel title="支出" />
           <AmountDisplay amount={totalExpense} type="expense" size="sm" />
         </div>
         <div className="flex justify-between text-sm pt-1 border-t">
-          <span className="text-muted-foreground">収支</span>
+          <MetricLabel title="収支" />
           <AmountDisplay amount={netIncome} type="balance" size="sm" weight="bold" />
         </div>
         {recentTransactions.length > 0 && (

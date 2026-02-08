@@ -1,6 +1,7 @@
 import { getShortMonth } from "../../lib/format";
 import { AmountDisplay } from "../ui/amount-display";
 import { Card, CardContent } from "../ui/card";
+import { MetricLabel } from "../ui/metric-label";
 
 interface MonthlySummaryCardProps {
   month: string;
@@ -47,11 +48,11 @@ export function MonthlySummaryCard({
         </div>
         <div className="space-y-1 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">収入</span>
+            <MetricLabel title="収入" />
             <AmountDisplay amount={totalIncome} type="income" size="sm" />
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">支出</span>
+            <MetricLabel title="支出" />
             <AmountDisplay amount={totalExpense} type="expense" size="sm" />
           </div>
         </div>

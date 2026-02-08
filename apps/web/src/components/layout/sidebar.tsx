@@ -1,7 +1,7 @@
 "use client";
 
 import type { Route } from "next";
-import { LayoutDashboard, TrendingUp, PiggyBank, Landmark, X } from "lucide-react";
+import { LayoutDashboard, TrendingUp, PiggyBank, Landmark, Calculator, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { buildGroupPath, extractGroupIdFromPath, isNavItemActive } from "../../lib/url";
@@ -30,6 +30,11 @@ const navItems = [
     title: "連携サービス",
     path: "accounts",
     icon: Landmark,
+  },
+  {
+    title: "シミュレーター",
+    path: "simulator",
+    icon: Calculator,
   },
 ];
 

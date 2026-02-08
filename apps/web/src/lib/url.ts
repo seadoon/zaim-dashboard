@@ -1,4 +1,4 @@
-const KNOWN_PATHS = ["cf", "bs", "accounts"];
+const KNOWN_PATHS = ["cf", "bs", "accounts", "simulator"];
 
 export function extractPagePath(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);

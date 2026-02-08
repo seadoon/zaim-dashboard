@@ -1,4 +1,5 @@
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
+import react from "@vitejs/plugin-react";
 import { playwright } from "@vitest/browser-playwright";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,11 +11,12 @@ export default defineConfig({
   test: {
     projects: [
       {
+        plugins: [react()],
         test: {
           name: "unit",
           globals: true,
           environment: "jsdom",
-          include: ["src/**/*.test.ts"],
+          include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
         },
       },
       {
