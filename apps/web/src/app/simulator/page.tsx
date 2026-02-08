@@ -14,13 +14,19 @@ export function SimulatorContent({ groupId }: { groupId?: string }) {
   );
   const totalInvestment = investmentHoldings.reduce((sum, h) => sum + (h.amount ?? 0), 0);
 
+  const isDemo = process.env.DEMO_MODE === "true";
+
   return (
     <PageLayout title="シミュレーター">
       <CompoundSimulator
-        defaultInitialAmount={totalInvestment}
-        portfolioContext={{
-          initialAmountSource: "あなたの投資総額",
-        }}
+        defaultInitialAmount={isDemo ? 0 : totalInvestment}
+        portfolioContext={
+          isDemo
+            ? undefined
+            : {
+                initialAmountSource: "あなたの投資総額",
+              }
+        }
       />
     </PageLayout>
   );

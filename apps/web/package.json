@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:demo": "DB_PATH=../../data/demo.db next dev",
+    "dev:demo": "DB_PATH=../../data/demo.db DEMO_MODE=true next dev",
     "build": "next build",
-    "build:demo": "DB_PATH=../../data/demo.db next build",
+    "build:demo": "DB_PATH=../../data/demo.db DEMO_MODE=true next build",
     "start": "next start",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
