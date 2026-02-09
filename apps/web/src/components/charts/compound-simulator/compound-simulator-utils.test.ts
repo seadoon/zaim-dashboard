@@ -12,6 +12,8 @@ import {
   buildFanChartData,
   computeTotalYears,
   computeWithdrawalMilestones,
+  computeSecurityScore,
+  getSecurityLabel,
   MILESTONE_CANDIDATES,
 } from "./compound-simulator-utils";
 
@@ -91,12 +93,12 @@ describe("computeSummaryYear", () => {
     expect(computeSummaryYear(20, 20, 0)).toBe(20);
   });
 
-  test("returns max(contributionYears, withdrawalStartYear) with withdrawal", () => {
+  test("returns withdrawalStartYear with withdrawal (idle gap)", () => {
     expect(computeSummaryYear(20, 30, 25)).toBe(30);
   });
 
-  test("returns contributionYears when withdrawalStartYear is smaller", () => {
-    expect(computeSummaryYear(20, 10, 10)).toBe(20);
+  test("returns withdrawalStartYear when overlap (withdrawal starts before contribution ends)", () => {
+    expect(computeSummaryYear(20, 10, 10)).toBe(10);
   });
 
   test("returns withdrawalStartYear when larger than contributionYears", () => {
@@ -380,5 +382,68 @@ describe("computeTotalYears", () => {
 
   test("handles idle period", () => {
     expect(computeTotalYears(20, 30, 25)).toBe(55);
+  });
+});
+
+describe("computeSecurityScore", () => {
+  test("returns 100 for zero depletion", () => {
+    expect(computeSecurityScore(0)).toBe(100);
+  });
+
+  test("returns 0 for 100% depletion", () => {
+    expect(computeSecurityScore(1)).toBe(0);
+  });
+
+  test("returns 80 for 20% depletion (no other factors)", () => {
+    expect(computeSecurityScore(0.2)).toBe(80);
+  });
+
+  test("clamps to 0-100 range", () => {
+    expect(computeSecurityScore(-0.1)).toBe(100);
+    expect(computeSecurityScore(1.5)).toBe(0);
+  });
+
+  test("penalizes for high failure probability", () => {
+    // base 80 - 0.5*20 = 70
+    expect(computeSecurityScore(0.2, 0.5)).toBe(70);
+  });
+
+  test("caps at 10 when median is zero", () => {
+    // base 17 but median is zero → capped at 10
+    expect(computeSecurityScore(0.83, 0.25, true)).toBeLessThanOrEqual(10);
+  });
+
+  test("high depletion + high failure + median zero → near 0", () => {
+    expect(computeSecurityScore(0.83, 0.25, true)).toBeLessThanOrEqual(10);
+    // the original case: 82.76% depletion, 24.54% failure, p50=0
+    const score = computeSecurityScore(0.8276, 0.2454, true);
+    expect(score).toBeLessThanOrEqual(10);
+  });
+});
+
+describe("getSecurityLabel", () => {
+  test("returns 非常に安心 for score >= 95", () => {
+    expect(getSecurityLabel(95)).toEqual({ label: "非常に安心", level: "safe" });
+    expect(getSecurityLabel(100)).toEqual({ label: "非常に安心", level: "safe" });
+  });
+
+  test("returns 安心 for score >= 80", () => {
+    expect(getSecurityLabel(80)).toEqual({ label: "安心", level: "safe" });
+    expect(getSecurityLabel(94)).toEqual({ label: "安心", level: "safe" });
+  });
+
+  test("returns やや注意 for score >= 60", () => {
+    expect(getSecurityLabel(60)).toEqual({ label: "やや注意", level: "caution" });
+    expect(getSecurityLabel(79)).toEqual({ label: "やや注意", level: "caution" });
+  });
+
+  test("returns 注意 for score >= 40", () => {
+    expect(getSecurityLabel(40)).toEqual({ label: "注意", level: "warning" });
+    expect(getSecurityLabel(59)).toEqual({ label: "注意", level: "warning" });
+  });
+
+  test("returns 要見直し for score < 40", () => {
+    expect(getSecurityLabel(39)).toEqual({ label: "要見直し", level: "danger" });
+    expect(getSecurityLabel(0)).toEqual({ label: "要見直し", level: "danger" });
   });
 });

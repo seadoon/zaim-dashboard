@@ -43,7 +43,7 @@ export function computeSummaryYear(
   withdrawalStartYear: number,
   withdrawalYears: number,
 ): number {
-  return withdrawalYears > 0 ? Math.max(contributionYears, withdrawalStartYear) : contributionYears;
+  return withdrawalYears > 0 ? withdrawalStartYear : contributionYears;
 }
 
 export function computeMonthlyWithdrawalForSummary(
@@ -137,4 +137,32 @@ export function computeTotalYears(
   withdrawalYears: number,
 ): number {
   return Math.max(contributionYears, withdrawalStartYear + withdrawalYears);
+}
+
+export function computeSecurityScore(
+  depletionProbability: number,
+  failureProbability?: number,
+  medianIsZero?: boolean,
+): number {
+  // ベース: 枯渇しない確率
+  let score = (1 - depletionProbability) * 100;
+  // 元本割れ確率が高い場合にペナルティ（最大-20pt）
+  if (failureProbability != null) {
+    score -= failureProbability * 20;
+  }
+  // 中央値が0（半数以上が枯渇）の場合、上限を10に制限
+  if (medianIsZero) {
+    score = Math.min(score, 10);
+  }
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+export type SecurityLevel = "safe" | "caution" | "warning" | "danger";
+
+export function getSecurityLabel(score: number): { label: string; level: SecurityLevel } {
+  if (score >= 95) return { label: "非常に安心", level: "safe" };
+  if (score >= 80) return { label: "安心", level: "safe" };
+  if (score >= 60) return { label: "やや注意", level: "caution" };
+  if (score >= 40) return { label: "注意", level: "warning" };
+  return { label: "要見直し", level: "danger" };
 }

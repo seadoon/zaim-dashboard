@@ -13,8 +13,12 @@ export interface SummaryInput {
   finalPrincipal: number;
   finalInterest: number;
   monthlyWithdrawal?: number;
+  grossMonthlyExpense?: number;
+  monthlyPensionIncome?: number;
+  monthlyOtherIncome?: number;
   drawdownFinalTotal?: number;
   depletionProbability?: number;
+  pensionStartYear?: number;
   taxFree?: boolean;
   withdrawalMode?: "rate" | "amount";
   withdrawalRate?: number;
@@ -45,8 +49,12 @@ export function generateSummary(input: SummaryInput): ReactNode {
     finalPrincipal,
     finalInterest,
     monthlyWithdrawal,
+    grossMonthlyExpense,
+    monthlyPensionIncome = 0,
+    monthlyOtherIncome = 0,
     drawdownFinalTotal,
     depletionProbability,
+    pensionStartYear,
     taxFree,
     withdrawalMode = "amount",
     withdrawalRate = 0,
@@ -144,7 +152,19 @@ export function generateSummary(input: SummaryInput): ReactNode {
           ? `${ratePrefix}年${withdrawalRate}%を${withdrawalYears}年間取り崩した場合、`
           : `${ratePrefix}開始時の資産から年${withdrawalRate}%を${withdrawalYears}年間取り崩した場合、`;
     } else {
-      const monthlyDesc = `毎月${taxFree ? "" : "手取り"}${formatMan(monthlyWithdrawal!)}円ずつ`;
+      const totalIncome = monthlyPensionIncome + monthlyOtherIncome;
+      const gross = grossMonthlyExpense ?? monthlyWithdrawal!;
+      let monthlyDesc: string;
+      if (totalIncome > 0 && gross > totalIncome) {
+        const incomeParts: string[] = [];
+        if (monthlyPensionIncome > 0) incomeParts.push(`年金${formatMan(monthlyPensionIncome)}円`);
+        if (monthlyOtherIncome > 0)
+          incomeParts.push(`その他収入${formatMan(monthlyOtherIncome)}円`);
+        const netWithdrawal = Math.max(gross - totalIncome, 0);
+        monthlyDesc = `毎月の生活費${formatMan(gross)}円のうち${incomeParts.join("・")}を除いた${taxFree ? "" : "手取り"}${formatMan(netWithdrawal)}円を`;
+      } else {
+        monthlyDesc = `毎月${taxFree ? "" : "手取り"}${formatMan(monthlyWithdrawal!)}円ずつ`;
+      }
       if (contributionYears === 0 && withdrawalStartYear === 0) {
         preamble = `${monthlyDesc}${withdrawalYears}年間取り崩した場合、`;
       } else if (overlap > 0) {
@@ -266,6 +286,196 @@ export function generateSummary(input: SummaryInput): ReactNode {
       );
     }
   }
+
+  // Calculation breakdown
+  const effectiveRate = annualReturnRate - expenseRatio;
+  const monthlyRate = Math.pow(1 + effectiveRate / 100, 1 / 12) - 1;
+  const taxRateUsed = taxFree ? 0 : TAX_RATE;
+
+  const formulaRows: ReactNode[] = [];
+
+  // Accumulation formulas
+  formulaRows.push(
+    <li key="rate">
+      実質年利: {annualReturnRate}% - {expenseRatio}% = {effectiveRate.toFixed(2)}%{" → "}月利: (1 +{" "}
+      {effectiveRate.toFixed(2)}%)^(1/12) - 1 = {(monthlyRate * 100).toFixed(4)}%
+    </li>,
+  );
+
+  if (finalPrincipal > 0) {
+    const contribTotal = monthlyContribution * 12 * contributionYears;
+    formulaRows.push(
+      <li key="principal">
+        元本: {formatMan(initialAmount)}
+        {contribTotal > 0 && (
+          <>
+            {" "}
+            + {formatMan(monthlyContribution)} × 12 × {contributionYears}年 ={" "}
+            {formatMan(finalPrincipal)}円
+          </>
+        )}
+      </li>,
+    );
+  }
+
+  if (summaryYear > 0) {
+    const totalMonths = summaryYear * 12;
+    const contribMonths = contributionYears * 12;
+    const r = (monthlyRate * 100).toFixed(4);
+
+    // FV of initial amount
+    if (initialAmount > 0) {
+      const fvInitial = initialAmount * Math.pow(1 + monthlyRate, totalMonths);
+      formulaRows.push(
+        <li key="fv-initial">
+          初期投資の複利: {formatMan(initialAmount)}円 × (1 + {r}%)^{totalMonths}ヶ月 ={" "}
+          {formatMan(Math.round(fvInitial))}円
+        </li>,
+      );
+    }
+
+    // FV of monthly contributions
+    if (monthlyContribution > 0 && contributionYears > 0) {
+      const fvAnnuity =
+        monthlyRate > 0
+          ? monthlyContribution * ((Math.pow(1 + monthlyRate, contribMonths) - 1) / monthlyRate)
+          : monthlyContribution * contribMonths;
+      const idleMonths = totalMonths - contribMonths;
+      const fvContrib =
+        idleMonths > 0 ? fvAnnuity * Math.pow(1 + monthlyRate, idleMonths) : fvAnnuity;
+      if (idleMonths > 0) {
+        formulaRows.push(
+          <li key="fv-contrib">
+            積立の複利: {formatMan(monthlyContribution)}円 × ((1 + {r}%)^{contribMonths} - 1) / {r}%
+            × (1 + {r}%)^{idleMonths} = {formatMan(Math.round(fvContrib))}円
+          </li>,
+        );
+      } else {
+        formulaRows.push(
+          <li key="fv-contrib">
+            積立の複利: {formatMan(monthlyContribution)}円 × ((1 + {r}%)^{contribMonths} - 1) / {r}%
+            = {formatMan(Math.round(fvContrib))}円
+          </li>,
+        );
+      }
+    }
+
+    const grossInterest =
+      taxRateUsed > 0 && finalInterest > 0
+        ? Math.round(finalInterest / (1 - taxRateUsed))
+        : finalInterest;
+    const grossTotal = finalPrincipal + grossInterest;
+    formulaRows.push(
+      <li key="compound">
+        {summaryYear}年後の税引前資産: 約{formatMan(grossTotal)}円
+      </li>,
+    );
+    if (!taxFree && grossInterest > 0) {
+      formulaRows.push(
+        <li key="tax">
+          税金: {formatMan(grossInterest)}円 × {(taxRateUsed * 100).toFixed(3)}% ={" "}
+          {formatMan(Math.round(grossInterest * taxRateUsed))}円{" → "}税引後:{" "}
+          {formatMan(finalTotal)}円
+        </li>,
+      );
+    }
+  }
+
+  // Withdrawal formulas
+  if (hasWithdrawal && withdrawalMode === "amount") {
+    const gross = grossMonthlyExpense ?? monthlyWithdrawal!;
+    const hasPension = monthlyPensionIncome > 0;
+    const pensionStartsAfterWithdrawal =
+      hasPension && pensionStartYear != null && pensionStartYear > withdrawalStartYear;
+
+    // Pre-pension period (if pension starts after withdrawal)
+    const prePensionYears = pensionStartsAfterWithdrawal
+      ? Math.min(pensionStartYear - withdrawalStartYear, withdrawalYears)
+      : 0;
+    const postPensionYears = withdrawalYears - prePensionYears;
+
+    if (prePensionYears > 0) {
+      const prePensionNet = Math.max(gross - monthlyOtherIncome, 0);
+      const prePensionAgeStart = currentAge != null ? currentAge + withdrawalStartYear : null;
+      const prePensionAgeEnd =
+        currentAge != null ? currentAge + withdrawalStartYear + prePensionYears : null;
+      const ageLabel =
+        prePensionAgeStart != null ? ` (${prePensionAgeStart}〜${prePensionAgeEnd}歳)` : "";
+      formulaRows.push(
+        <li key="pre-pension">
+          年金受給前{ageLabel}: {formatMan(gross)}円
+          {monthlyOtherIncome > 0 && <> - その他{formatMan(monthlyOtherIncome)}円</>}
+          {" = "}
+          {formatMan(prePensionNet)}円/月 × {prePensionYears}年
+        </li>,
+      );
+    }
+
+    if (hasPension && postPensionYears > 0) {
+      const postPensionNet = Math.max(gross - monthlyPensionIncome - monthlyOtherIncome, 0);
+      const postAgeStart =
+        currentAge != null ? currentAge + withdrawalStartYear + prePensionYears : null;
+      const postAgeEnd =
+        currentAge != null ? currentAge + withdrawalStartYear + withdrawalYears : null;
+      const ageLabel = postAgeStart != null ? ` (${postAgeStart}〜${postAgeEnd}歳)` : "";
+      formulaRows.push(
+        <li key="post-pension">
+          年金受給後{ageLabel}: {formatMan(gross)}円 - 年金{formatMan(monthlyPensionIncome)}円
+          {monthlyOtherIncome > 0 && <> - その他{formatMan(monthlyOtherIncome)}円</>}
+          {" = "}
+          {formatMan(postPensionNet)}円/月 × {postPensionYears}年
+        </li>,
+      );
+    } else if (!hasPension) {
+      formulaRows.push(
+        <li key="net-withdrawal">
+          月額手出し: {formatMan(gross)}円
+          {monthlyOtherIncome > 0 && (
+            <>
+              {" "}
+              - その他{formatMan(monthlyOtherIncome)}円 ={" "}
+              {formatMan(Math.max(gross - monthlyOtherIncome, 0))}円
+            </>
+          )}
+        </li>,
+      );
+    }
+
+    // Withdrawal rate (use first year's actual portfolio withdrawal)
+    const firstYearNet =
+      prePensionYears > 0
+        ? Math.max(gross - monthlyOtherIncome, 0)
+        : Math.max(gross - monthlyPensionIncome - monthlyOtherIncome, 0);
+    const annualW = firstYearNet * 12;
+    if (finalTotal > 0) {
+      const wRate = (annualW / finalTotal) * 100;
+      formulaRows.push(
+        <li key="w-rate">
+          初年度引出率: {formatMan(annualW)}円/年 ÷ {formatMan(finalTotal)}円 = {wRate.toFixed(1)}%
+        </li>,
+      );
+    }
+  } else if (hasWithdrawal && withdrawalMode === "rate") {
+    const startAsset = finalTotal;
+    const firstYearW = Math.round((startAsset * withdrawalRate) / 100);
+    formulaRows.push(
+      <li key="rate-withdrawal">
+        初年度引出額: {formatMan(startAsset)}円 × {withdrawalRate}% = {formatMan(firstYearW)}円/年(
+        {formatMan(Math.round(firstYearW / 12))}円/月)
+      </li>,
+    );
+  }
+
+  parts.push(
+    <details key="formula" className="mt-2">
+      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
+        計算式を表示
+      </summary>
+      <ul className="mt-1.5 space-y-0.5 text-xs text-muted-foreground list-disc pl-4">
+        {formulaRows}
+      </ul>
+    </details>,
+  );
 
   return <>{parts}</>;
 }

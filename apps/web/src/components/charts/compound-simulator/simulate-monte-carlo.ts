@@ -1,3 +1,4 @@
+import { computeSecurityScore } from "./compound-simulator-utils";
 import { TAX_RATE } from "./constants";
 
 const NUM_SIMULATIONS = 5000;
@@ -36,6 +37,10 @@ export interface MonteCarloInput {
   expenseRatio?: number;
   inflationAdjustedWithdrawal?: boolean;
   monthlyPensionIncome?: number;
+  pensionStartYear?: number;
+  monthlyOtherIncome?: number;
+  contributionDeltas?: number[];
+  rateDeltas?: number[];
 }
 
 export interface MonteCarloYearData {
@@ -58,11 +63,21 @@ export interface DistributionBin {
   isDepleted: boolean;
 }
 
+export interface SensitivityRow {
+  monthlyContribution: number;
+  delta: number;
+  depletionProbability: number;
+  securityScore: number;
+  medianFinalBalance: number;
+  withdrawalRate?: number;
+}
+
 export interface MonteCarloResult {
   yearlyData: MonteCarloYearData[];
   failureProbability: number;
   depletionProbability: number;
   distribution: DistributionBin[];
+  sensitivityRows?: SensitivityRow[];
 }
 
 export function simulateMonteCarlo({
@@ -80,6 +95,10 @@ export function simulateMonteCarlo({
   expenseRatio = 0,
   inflationAdjustedWithdrawal = false,
   monthlyPensionIncome = 0,
+  pensionStartYear,
+  monthlyOtherIncome = 0,
+  contributionDeltas,
+  rateDeltas,
 }: MonteCarloInput): MonteCarloResult {
   const rng = mulberry32(SEED);
   const taxRate = taxFree ? 0 : TAX_RATE;
@@ -96,6 +115,35 @@ export function simulateMonteCarlo({
     !isRateMode && !inflationAdjustedWithdrawal && ri > 0 ? 1 / Math.pow(1 + ri, 1 / 12) : 1;
 
   const totalYears = Math.max(contributionYears, withdrawalStartYear + withdrawalYears);
+
+  // Sensitivity analysis: extra contribution variants (delta≠0)
+  const validExtraDeltas = contributionDeltas
+    ? contributionDeltas.filter((d) => d !== 0 && monthlyContribution + d >= 0)
+    : [];
+  const numExtra = validExtraDeltas.length;
+  const extraPaths: Float64Array[] = [];
+  const extraCostBasis: Float64Array[] = [];
+  const extraInitialWithdrawal: (Float64Array | null)[] = [];
+  for (let d = 0; d < numExtra; d++) {
+    extraPaths.push(new Float64Array(NUM_SIMULATIONS).fill(initialAmount));
+    extraCostBasis.push(new Float64Array(NUM_SIMULATIONS).fill(initialAmount));
+    extraInitialWithdrawal.push(isRateMode ? new Float64Array(NUM_SIMULATIONS) : null);
+  }
+
+  // Sensitivity analysis: rate variants (for rate mode)
+  const validRateDeltas =
+    rateDeltas && isRateMode
+      ? rateDeltas.filter((d) => d !== 0 && (annualWithdrawalRate ?? 0) + d > 0)
+      : [];
+  const numRateExtra = validRateDeltas.length;
+  const ratePaths: Float64Array[] = [];
+  const rateCostBasis: Float64Array[] = [];
+  const rateInitialW: Float64Array[] = [];
+  for (let d = 0; d < numRateExtra; d++) {
+    ratePaths.push(new Float64Array(NUM_SIMULATIONS).fill(initialAmount));
+    rateCostBasis.push(new Float64Array(NUM_SIMULATIONS).fill(initialAmount));
+    rateInitialW.push(new Float64Array(NUM_SIMULATIONS));
+  }
 
   const paths = new Float64Array(NUM_SIMULATIONS).fill(initialAmount);
   const sorted = new Float64Array(NUM_SIMULATIONS);
@@ -148,7 +196,9 @@ export function simulateMonteCarlo({
       }
       for (let i = 0; i < NUM_SIMULATIONS; i++) {
         const z = normalRandom(rng);
-        paths[i] = paths[i] * Math.exp(monthlyDrift + monthlySigma * z);
+        const growthFactor = Math.exp(monthlyDrift + monthlySigma * z);
+
+        paths[i] *= growthFactor;
 
         if (isContributing) {
           paths[i] += monthlyContribution;
@@ -165,7 +215,9 @@ export function simulateMonteCarlo({
           } else {
             baseWithdrawal = currentMonthlyWithdrawal;
           }
-          const netWithdrawal = Math.max(baseWithdrawal - monthlyPensionIncome, 0);
+          const pensionActive = pensionStartYear != null && year >= pensionStartYear;
+          const income = (pensionActive ? monthlyPensionIncome : 0) + monthlyOtherIncome;
+          const netWithdrawal = Math.max(baseWithdrawal - income, 0);
           if (yearlyWithdrawals) yearlyWithdrawals[i] += netWithdrawal;
           cumulativeWithdrawals[i] += netWithdrawal;
           const gainRatio = paths[i] > costBasis[i] ? (paths[i] - costBasis[i]) / paths[i] : 0;
@@ -174,6 +226,66 @@ export function simulateMonteCarlo({
           costBasis[i] *= 1 - withdrawalRatio;
           paths[i] = paths[i] - netWithdrawal - taxOnWithdrawal;
           if (paths[i] < 0) paths[i] = 0;
+        }
+
+        // Sensitivity analysis: extra contribution variants
+        for (let d = 0; d < numExtra; d++) {
+          extraPaths[d][i] *= growthFactor;
+          if (isContributing) {
+            const mc = monthlyContribution + validExtraDeltas[d];
+            extraPaths[d][i] += mc;
+            extraCostBasis[d][i] += mc;
+          }
+          if (isWithdrawing && extraPaths[d][i] > 0) {
+            let baseW: number;
+            const ewa = extraInitialWithdrawal[d];
+            if (isRateMode && ewa) {
+              if (ewa[i] === 0) ewa[i] = (extraPaths[d][i] * annualWithdrawalRate!) / 100 / 12;
+              baseW = ewa[i];
+            } else {
+              baseW = currentMonthlyWithdrawal;
+            }
+            const pensionActiveExtra = pensionStartYear != null && year >= pensionStartYear;
+            const incomeExtra =
+              (pensionActiveExtra ? monthlyPensionIncome : 0) + monthlyOtherIncome;
+            const netW = Math.max(baseW - incomeExtra, 0);
+            const gr =
+              extraPaths[d][i] > extraCostBasis[d][i]
+                ? (extraPaths[d][i] - extraCostBasis[d][i]) / extraPaths[d][i]
+                : 0;
+            const tw = netW * gr * taxRate;
+            const wr = Math.min(netW / extraPaths[d][i], 1);
+            extraCostBasis[d][i] *= 1 - wr;
+            extraPaths[d][i] = extraPaths[d][i] - netW - tw;
+            if (extraPaths[d][i] < 0) extraPaths[d][i] = 0;
+          }
+        }
+
+        // Sensitivity analysis: rate delta variants (same contribution, different withdrawal rate)
+        for (let d = 0; d < numRateExtra; d++) {
+          ratePaths[d][i] *= growthFactor;
+          if (isContributing) {
+            ratePaths[d][i] += monthlyContribution;
+            rateCostBasis[d][i] += monthlyContribution;
+          }
+          if (isWithdrawing && ratePaths[d][i] > 0) {
+            const adjRate = annualWithdrawalRate! + validRateDeltas[d];
+            const rwa = rateInitialW[d];
+            if (rwa[i] === 0) rwa[i] = (ratePaths[d][i] * adjRate) / 100 / 12;
+            const baseW = rwa[i];
+            const pensionActiveR = pensionStartYear != null && year >= pensionStartYear;
+            const incomeR = (pensionActiveR ? monthlyPensionIncome : 0) + monthlyOtherIncome;
+            const netW = Math.max(baseW - incomeR, 0);
+            const gr =
+              ratePaths[d][i] > rateCostBasis[d][i]
+                ? (ratePaths[d][i] - rateCostBasis[d][i]) / ratePaths[d][i]
+                : 0;
+            const tw = netW * gr * taxRate;
+            const wr = Math.min(netW / ratePaths[d][i], 1);
+            rateCostBasis[d][i] *= 1 - wr;
+            ratePaths[d][i] = ratePaths[d][i] - netW - tw;
+            if (ratePaths[d][i] < 0) ratePaths[d][i] = 0;
+          }
         }
       }
 
@@ -188,7 +300,8 @@ export function simulateMonteCarlo({
     let yearDepletionCount = 0;
     if (isWithdrawing) {
       for (let i = 0; i < NUM_SIMULATIONS; i++) {
-        if (paths[i] <= 0) yearDepletionCount++;
+        // 枯渇 = ポートフォリオが0 かつ 実際に引出しが必要だった（収入だけではカバーできない）
+        if (paths[i] <= 0 && cumulativeWithdrawals[i] > 0) yearDepletionCount++;
       }
     }
 
@@ -232,7 +345,7 @@ export function simulateMonteCarlo({
 
   let depletedCnt = 0;
   for (let i = 0; i < NUM_SIMULATIONS; i++) {
-    if (sorted[i] <= 0) depletedCnt++;
+    if (paths[i] <= 0 && cumulativeWithdrawals[i] > 0) depletedCnt++;
   }
   if (depletedCnt > 0) {
     distribution.push({ rangeEnd: 0, count: depletedCnt, isDepleted: true });
@@ -258,10 +371,100 @@ export function simulateMonteCarlo({
     }
   }
 
+  // Compute sensitivity analysis rows
+  let sensitivityRows: SensitivityRow[] | undefined;
+  const fp = failureCount / NUM_SIMULATIONS;
+
+  if (rateDeltas && rateDeltas.length > 0 && isRateMode) {
+    // Rate mode: vary withdrawal rate
+    const allRateDeltas = [...new Set([...rateDeltas, 0])]
+      .filter((d) => (annualWithdrawalRate ?? 0) + d > 0)
+      .sort((a, b) => a - b);
+    const extraSorted = new Float64Array(NUM_SIMULATIONS);
+
+    sensitivityRows = allRateDeltas.map((delta) => {
+      const rate = Math.round(((annualWithdrawalRate ?? 0) + delta) * 10) / 10;
+      if (delta === 0) {
+        const median = Math.round(sorted[Math.floor(NUM_SIMULATIONS * 0.5)]);
+        return {
+          monthlyContribution,
+          delta: 0,
+          depletionProbability,
+          securityScore: computeSecurityScore(depletionProbability, fp, median <= 0),
+          medianFinalBalance: median,
+          withdrawalRate: rate,
+        };
+      }
+      const idx = validRateDeltas.indexOf(delta);
+      let depletedCount = 0;
+      let rateFailureCount = 0;
+      if (withdrawalYears > 0) {
+        for (let i = 0; i < NUM_SIMULATIONS; i++) {
+          if (ratePaths[idx][i] <= 0) depletedCount++;
+          if (ratePaths[idx][i] + cumulativeWithdrawals[i] < totalPrincipal) rateFailureCount++;
+        }
+      }
+      const dp = withdrawalYears > 0 ? depletedCount / NUM_SIMULATIONS : 0;
+      const efp = withdrawalYears > 0 ? rateFailureCount / NUM_SIMULATIONS : 0;
+      extraSorted.set(ratePaths[idx]);
+      extraSorted.sort();
+      const median = Math.round(extraSorted[Math.floor(NUM_SIMULATIONS * 0.5)]);
+      return {
+        monthlyContribution,
+        delta,
+        depletionProbability: dp,
+        securityScore: computeSecurityScore(dp, efp, median <= 0),
+        medianFinalBalance: median,
+        withdrawalRate: rate,
+      };
+    });
+  } else if (contributionDeltas && contributionDeltas.length > 0) {
+    // Amount mode: vary contribution
+    const allDeltas = [...new Set([...contributionDeltas, 0])]
+      .filter((d) => monthlyContribution + d >= 0)
+      .sort((a, b) => a - b);
+    const extraSorted = new Float64Array(NUM_SIMULATIONS);
+
+    sensitivityRows = allDeltas.map((delta) => {
+      if (delta === 0) {
+        const median = Math.round(sorted[Math.floor(NUM_SIMULATIONS * 0.5)]);
+        return {
+          monthlyContribution,
+          delta: 0,
+          depletionProbability,
+          securityScore: computeSecurityScore(depletionProbability, fp, median <= 0),
+          medianFinalBalance: median,
+        };
+      }
+      const idx = validExtraDeltas.indexOf(delta);
+      let depletedCount = 0;
+      let extraFailureCount = 0;
+      if (withdrawalYears > 0) {
+        for (let i = 0; i < NUM_SIMULATIONS; i++) {
+          if (extraPaths[idx][i] <= 0) depletedCount++;
+          if (extraPaths[idx][i] + cumulativeWithdrawals[i] < totalPrincipal) extraFailureCount++;
+        }
+      }
+      const dp = withdrawalYears > 0 ? depletedCount / NUM_SIMULATIONS : 0;
+      const efp = withdrawalYears > 0 ? extraFailureCount / NUM_SIMULATIONS : 0;
+      extraSorted.set(extraPaths[idx]);
+      extraSorted.sort();
+      const median = Math.round(extraSorted[Math.floor(NUM_SIMULATIONS * 0.5)]);
+      return {
+        monthlyContribution: monthlyContribution + delta,
+        delta,
+        depletionProbability: dp,
+        securityScore: computeSecurityScore(dp, efp, median <= 0),
+        medianFinalBalance: median,
+      };
+    });
+  }
+
   return {
     yearlyData,
     failureProbability: failureCount / NUM_SIMULATIONS,
     depletionProbability,
     distribution,
+    sensitivityRows,
   };
 }

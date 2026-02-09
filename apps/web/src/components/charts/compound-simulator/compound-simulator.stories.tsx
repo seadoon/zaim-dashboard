@@ -117,3 +117,14 @@ export const WithSP500Preset: Story = {
     defaultAnnualReturnRate: 10,
   },
 };
+
+export const WithSecurityFeatures: Story = {
+  args: {
+    defaultInitialAmount: 5_000_000,
+    defaultMonthlyContribution: 50_000,
+    defaultWithdrawalMode: "amount",
+    defaultMonthlyWithdrawal: 200_000,
+    defaultWithdrawalYears: 30,
+    defaultCurrentAge: 30,
+  },
+};

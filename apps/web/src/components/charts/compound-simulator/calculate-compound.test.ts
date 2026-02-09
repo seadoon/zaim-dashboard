@@ -526,6 +526,7 @@ describe("calculateCompound", () => {
         annualWithdrawalRate: 4,
         withdrawalYears: 10,
         monthlyPensionIncome: 10_000,
+        pensionStartYear: 0,
       });
 
       const withoutPension = calculateCompound({
@@ -713,6 +714,7 @@ describe("calculateCompound", () => {
         monthlyWithdrawal: 100_000,
         withdrawalYears: 10,
         monthlyPensionIncome: 50_000,
+        pensionStartYear: 0,
       });
 
       // Net withdrawal = 100K - 50K = 50K/month = 600K/year
@@ -731,11 +733,96 @@ describe("calculateCompound", () => {
         monthlyWithdrawal: 50_000,
         withdrawalYears: 10,
         monthlyPensionIncome: 100_000,
+        pensionStartYear: 0,
       });
 
       // Net withdrawal = max(50K - 100K, 0) = 0
       expect(result[1].yearlyWithdrawal).toBe(0);
       expect(result[10].total).toBe(10_000_000);
+    });
+
+    it("should apply pension only after pensionStartYear", () => {
+      const result = calculateCompound({
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+        monthlyPensionIncome: 50_000,
+        pensionStartYear: 5,
+      });
+
+      // Years 1-4: net = 100K/month = 1.2M/year (pension not active, year < 5)
+      expect(result[1].yearlyWithdrawal).toBe(1_200_000);
+      // Years 5-10: net = 50K/month = 600K/year (pension active, year >= 5)
+      expect(result[5].yearlyWithdrawal).toBe(600_000);
+      // Total: 1.2M * 4 + 0.6M * 6 = 4.8M + 3.6M = 8.4M
+      // Remaining: 10M - 8.4M = 1.6M
+      expect(result[10].total).toBe(1_600_000);
+    });
+
+    it("should not apply pension when pensionStartYear is undefined", () => {
+      const result = calculateCompound({
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+        monthlyPensionIncome: 50_000,
+      });
+
+      // Pension not applied when pensionStartYear is undefined
+      // Net withdrawal = 100K/month = 1.2M/year
+      expect(result[1].yearlyWithdrawal).toBe(1_200_000);
+      // 10M - 1.2M * 10 = -2M → clamped to 0
+      expect(result[10].total).toBe(0);
+    });
+  });
+
+  describe("other income", () => {
+    it("should always apply monthlyOtherIncome during withdrawal", () => {
+      const result = calculateCompound({
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+        monthlyOtherIncome: 30_000,
+      });
+
+      // Net withdrawal = 100K - 30K = 70K/month = 840K/year
+      expect(result[1].yearlyWithdrawal).toBe(840_000);
+      // 10M - 840K * 10 = 1.6M
+      expect(result[10].total).toBe(1_600_000);
+    });
+
+    it("should apply other income even before pensionStartYear", () => {
+      const result = calculateCompound({
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+        monthlyPensionIncome: 50_000,
+        pensionStartYear: 5,
+        monthlyOtherIncome: 20_000,
+      });
+
+      // Years 1-4: net = 100K - 20K = 80K/month = 960K/year (pension not active, year < 5)
+      expect(result[1].yearlyWithdrawal).toBe(960_000);
+      // Years 5-10: net = 100K - 50K - 20K = 30K/month = 360K/year (pension active, year >= 5)
+      expect(result[5].yearlyWithdrawal).toBe(360_000);
+      // Total: 960K * 4 + 360K * 6 = 3.84M + 2.16M = 6M
+      // Remaining: 10M - 6M = 4M
+      expect(result[10].total).toBe(4_000_000);
     });
   });
 

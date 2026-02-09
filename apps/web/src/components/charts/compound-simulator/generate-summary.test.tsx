@@ -57,12 +57,13 @@ describe("generateSummary", () => {
     expect(text).toContain("税引後で約1.5億円になる見込み");
   });
 
-  test("omits interest breakdown when interest is zero", () => {
+  test("omits interest breakdown narrative when interest is zero", () => {
     const text = renderText({
       ...baseInput,
       finalInterest: 0,
     });
-    expect(text).not.toContain("運用益");
+    // Narrative should not mention interest breakdown, but results table still shows it
+    expect(text).not.toContain("運用益で、元本に対して");
   });
 
   describe("withdrawal summary", () => {
@@ -128,7 +129,8 @@ describe("generateSummary", () => {
         depletionProbability: 0,
       });
       expect(text).toContain("約1,000万円（税引後）が残る見込み");
-      expect(text).not.toContain("枯渇");
+      // Narrative should not mention depletion risk, but results table shows "枯渇確率0.0%"
+      expect(text).not.toContain("枯渇するリスク");
     });
 
     test("does not show withdrawal summary when withdrawalYears is 0", () => {

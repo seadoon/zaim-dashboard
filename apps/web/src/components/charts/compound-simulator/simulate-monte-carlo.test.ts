@@ -574,13 +574,103 @@ describe("simulateMonteCarlo", () => {
         withdrawalStartYear: 0,
         monthlyWithdrawal: 100_000,
         withdrawalYears: 20,
+        pensionStartYear: 0,
       };
 
-      const noPension = simulateMonteCarlo({ ...base });
+      const noPension = simulateMonteCarlo({ ...base, monthlyPensionIncome: 0 });
       const withPension = simulateMonteCarlo({ ...base, monthlyPensionIncome: 50_000 });
 
       // Pension reduces net withdrawal, so less depletion
       expect(withPension.depletionProbability).toBeLessThan(noPension.depletionProbability);
+    });
+
+    it("should apply pension only after pensionStartYear", () => {
+      const base = {
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 3,
+        volatility: 0,
+        inflationRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 30,
+        monthlyPensionIncome: 50_000,
+      };
+
+      // Pension from year 0
+      const allPension = simulateMonteCarlo({ ...base, pensionStartYear: 0 });
+      // Pension delayed until year 20
+      const delayedPension = simulateMonteCarlo({ ...base, pensionStartYear: 20 });
+
+      // With delayed pension, less income offset, so lower remaining
+      expect(delayedPension.yearlyData[15].p50).toBeLessThan(allPension.yearlyData[15].p50);
+    });
+
+    it("should not apply pension when pensionStartYear is undefined", () => {
+      const base = {
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        volatility: 0,
+        inflationRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+        monthlyPensionIncome: 50_000,
+      };
+
+      const result = simulateMonteCarlo({ ...base });
+      // Pension not applied when pensionStartYear is undefined
+      // Net withdrawal = 100K/month = 1.2M/year
+      // After 10 years: 10M - 1.2M * 10 = -2M → clamped to 0
+      expect(result.yearlyData[10].p50).toBe(0);
+    });
+  });
+
+  describe("other income", () => {
+    it("should always apply monthlyOtherIncome during withdrawal", () => {
+      const base = {
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        volatility: 0,
+        inflationRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+      };
+
+      const result = simulateMonteCarlo({ ...base, monthlyOtherIncome: 30_000 });
+      // Net withdrawal = 100K - 30K = 70K/month = 840K/year
+      // After 10 years: 10M - 840K * 10 = 1.6M
+      expect(result.yearlyData[10].p50).toBe(1_600_000);
+    });
+
+    it("should apply other income even before pensionStartYear", () => {
+      const base = {
+        initialAmount: 10_000_000,
+        monthlyContribution: 0,
+        annualReturnRate: 0,
+        volatility: 0,
+        inflationRate: 0,
+        contributionYears: 0,
+        withdrawalStartYear: 0,
+        monthlyWithdrawal: 100_000,
+        withdrawalYears: 10,
+        monthlyPensionIncome: 50_000,
+        pensionStartYear: 5,
+        monthlyOtherIncome: 20_000,
+      };
+
+      const result = simulateMonteCarlo(base);
+      // Years 1-4: net = 100K - 20K = 80K/month = 960K/year (pension not active, year < 5)
+      // Years 5-10: net = 100K - 50K - 20K = 30K/month = 360K/year (pension active, year >= 5)
+      // Total withdrawn = 960K * 4 + 360K * 6 = 3.84M + 2.16M = 6M
+      // Remaining: 10M - 6M = 4M
+      expect(result.yearlyData[10].p50).toBe(4_000_000);
     });
   });
 
@@ -870,6 +960,149 @@ describe("simulateMonteCarlo", () => {
       for (const d of withdrawing) {
         expect(d.medianYearlyWithdrawal).toBeUndefined();
       }
+    });
+  });
+
+  describe("sensitivity analysis (integrated)", () => {
+    const DELTAS = [-20_000, -10_000, 0, 10_000, 20_000, 30_000];
+    const sensitivityBase = {
+      initialAmount: 5_000_000,
+      monthlyContribution: 50_000,
+      annualReturnRate: 5,
+      volatility: 15,
+      inflationRate: 2,
+      contributionYears: 20,
+      withdrawalStartYear: 20,
+      withdrawalYears: 25,
+      monthlyWithdrawal: 200_000,
+      expenseRatio: 0.1,
+      contributionDeltas: DELTAS,
+    };
+
+    it("returns rows for each valid delta", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      // monthlyContribution=50000, all deltas valid (50000+delta >= 0)
+      expect(result.sensitivityRows).toBeDefined();
+      expect(result.sensitivityRows!.length).toBe(6);
+    });
+
+    it("each row has required fields", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      for (const row of result.sensitivityRows!) {
+        expect(typeof row.monthlyContribution).toBe("number");
+        expect(typeof row.delta).toBe("number");
+        expect(typeof row.depletionProbability).toBe("number");
+        expect(typeof row.securityScore).toBe("number");
+        expect(typeof row.medianFinalBalance).toBe("number");
+        expect(row.depletionProbability).toBeGreaterThanOrEqual(0);
+        expect(row.depletionProbability).toBeLessThanOrEqual(1);
+        expect(row.securityScore).toBeGreaterThanOrEqual(0);
+        expect(row.securityScore).toBeLessThanOrEqual(100);
+      }
+    });
+
+    it("current row (delta=0) matches monthlyContribution", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      const currentRow = result.sensitivityRows!.find((r) => r.delta === 0);
+      expect(currentRow).toBeDefined();
+      expect(currentRow!.monthlyContribution).toBe(50_000);
+    });
+
+    it("delta=0 row matches main MC depletionProbability", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      const currentRow = result.sensitivityRows!.find((r) => r.delta === 0);
+      expect(currentRow!.depletionProbability).toBe(result.depletionProbability);
+    });
+
+    it("higher contribution generally leads to higher median balance", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      const rows = result.sensitivityRows!;
+      const first = rows[0];
+      const last = rows[rows.length - 1];
+      expect(last.medianFinalBalance).toBeGreaterThanOrEqual(first.medianFinalBalance);
+    });
+
+    it("filters out deltas that would make contribution negative", () => {
+      const result = simulateMonteCarlo({
+        ...sensitivityBase,
+        monthlyContribution: 10_000,
+      });
+      // 10000 + (-20000) < 0 → filtered
+      // valid: [-10000, 0, +10000, +20000, +30000]
+      expect(result.sensitivityRows!.length).toBe(5);
+      expect(result.sensitivityRows![0].monthlyContribution).toBe(0);
+    });
+
+    it("no withdrawal produces zero depletion probability", () => {
+      const result = simulateMonteCarlo({
+        ...sensitivityBase,
+        withdrawalYears: 0,
+      });
+      for (const row of result.sensitivityRows!) {
+        expect(row.depletionProbability).toBe(0);
+        // Score may be < 100 due to failure probability penalty
+        expect(row.securityScore).toBeGreaterThanOrEqual(80);
+        expect(row.securityScore).toBeLessThanOrEqual(100);
+      }
+    });
+
+    it("securityScore accounts for depletion, failure, and median", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      for (const row of result.sensitivityRows!) {
+        // Score should be at most the base (1 - depletion)*100
+        const baseScore = Math.round((1 - row.depletionProbability) * 100);
+        expect(row.securityScore).toBeLessThanOrEqual(baseScore);
+        expect(row.securityScore).toBeGreaterThanOrEqual(0);
+        expect(row.securityScore).toBeLessThanOrEqual(100);
+      }
+    });
+
+    it("security scores are monotonically non-decreasing with higher contribution", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      const rows = result.sensitivityRows!;
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i].securityScore).toBeGreaterThanOrEqual(rows[i - 1].securityScore);
+      }
+    });
+
+    it("median balances are monotonically non-decreasing with higher contribution", () => {
+      const result = simulateMonteCarlo(sensitivityBase);
+      const rows = result.sensitivityRows!;
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i].medianFinalBalance).toBeGreaterThanOrEqual(rows[i - 1].medianFinalBalance);
+      }
+    });
+
+    it("same contribution amount produces consistent results across different base levels", () => {
+      const result50k = simulateMonteCarlo({
+        ...sensitivityBase,
+        monthlyContribution: 50_000,
+      });
+      const row60kFromBase50k = result50k.sensitivityRows!.find(
+        (r) => r.monthlyContribution === 60_000,
+      );
+
+      const result60k = simulateMonteCarlo({
+        ...sensitivityBase,
+        monthlyContribution: 60_000,
+      });
+      const row60kFromBase60k = result60k.sensitivityRows!.find(
+        (r) => r.monthlyContribution === 60_000,
+      );
+
+      expect(row60kFromBase50k).toBeDefined();
+      expect(row60kFromBase60k).toBeDefined();
+      // Same z values, same computation → same results
+      expect(row60kFromBase60k!.depletionProbability).toBe(row60kFromBase50k!.depletionProbability);
+      expect(row60kFromBase60k!.medianFinalBalance).toBe(row60kFromBase50k!.medianFinalBalance);
+    });
+
+    it("returns undefined sensitivityRows when no deltas provided", () => {
+      const result = simulateMonteCarlo({
+        ...sensitivityBase,
+        contributionDeltas: undefined,
+      });
+      expect(result.sensitivityRows).toBeUndefined();
     });
   });
 

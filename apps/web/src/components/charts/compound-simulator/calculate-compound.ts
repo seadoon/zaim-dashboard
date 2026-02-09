@@ -14,6 +14,8 @@ export interface CompoundCalculatorInput {
   inflationRate?: number;
   inflationAdjustedWithdrawal?: boolean;
   monthlyPensionIncome?: number;
+  pensionStartYear?: number;
+  monthlyOtherIncome?: number;
 }
 
 export interface YearlyProjection {
@@ -41,6 +43,8 @@ export function calculateCompound({
   inflationRate = 0,
   inflationAdjustedWithdrawal = false,
   monthlyPensionIncome = 0,
+  pensionStartYear,
+  monthlyOtherIncome = 0,
 }: CompoundCalculatorInput): YearlyProjection[] {
   const projections: YearlyProjection[] = [];
   const monthlyRate = Math.pow(1 + (annualReturnRate - expenseRatio) / 100, 1 / 12) - 1;
@@ -102,7 +106,9 @@ export function calculateCompound({
             currentMonthlyWithdrawal *= monthlyInflationFactor;
           }
         }
-        const netWithdrawal = Math.max(baseWithdrawal - monthlyPensionIncome, 0);
+        const pensionActive = pensionStartYear != null && year >= pensionStartYear;
+        const income = (pensionActive ? monthlyPensionIncome : 0) + monthlyOtherIncome;
+        const netWithdrawal = Math.max(baseWithdrawal - income, 0);
         yearlyWithdrawalTotal += netWithdrawal;
         const gainRatio =
           currentTotal > totalPrincipal ? (currentTotal - totalPrincipal) / currentTotal : 0;

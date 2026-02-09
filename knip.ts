@@ -9,6 +9,9 @@ const config: KnipConfig = {
     "apps/crawler": {
       ignore: ["src/auth.ts", "src/hooks/helpers.ts"],
     },
+    "apps/simulator": {
+      ignoreDependencies: ["postcss"],
+    },
   },
 };
 

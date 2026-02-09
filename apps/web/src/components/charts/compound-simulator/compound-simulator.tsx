@@ -1,7 +1,7 @@
 "use client";
 
-import { Calculator, CircleHelp } from "lucide-react";
-import { Fragment, useRef, useState } from "react";
+import { Calculator, CircleHelp, ClipboardCopy } from "lucide-react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import {
   Area,
   XAxis,
@@ -33,8 +33,12 @@ import {
   buildFanChartData,
   computeTotalYears,
   computeWithdrawalMilestones,
+  computeSecurityScore,
 } from "./compound-simulator-utils";
 import { generateSummary } from "./generate-summary";
+import { adjustedPension } from "./pension-utils";
+import { SecurityScore } from "./security-score";
+import { SensitivityTable } from "./sensitivity-table";
 import { useCompoundCalculator } from "./use-compound-calculator";
 import { useMonteCarloSimulator } from "./use-monte-carlo-simulator";
 
@@ -95,10 +99,10 @@ function buildTimelineSegments(
 }
 
 const phaseChipStyles: Record<PhaseType, string> = {
-  contribution: "bg-background text-primary border",
-  idle: "bg-background border",
-  withdrawal: "bg-background text-destructive border",
-  overlap: "bg-background text-purple-600 border",
+  contribution: "bg-blue-50 text-blue-800",
+  idle: "bg-gray-100 text-gray-600",
+  withdrawal: "bg-orange-50 text-orange-800",
+  overlap: "bg-purple-50 text-purple-800",
 };
 
 const phaseLabels: Record<PhaseType, string> = {
@@ -125,28 +129,36 @@ function TimelinePhaseChips({
   if (segments.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-      {segments.map((seg, i) => (
-        <Fragment key={`${seg.type}-${seg.start}`}>
-          {i > 0 && <span>→</span>}
-          <span className={`rounded px-2 py-0.5 font-medium ${phaseChipStyles[seg.type]}`}>
-            {phaseLabels[seg.type]} {seg.end - seg.start}年
-            {seg.type === "idle" && (
-              <UiTooltip
-                content="追加投資せず、既存の資産を運用のみ続ける期間"
-                aria-label="据え置きの説明"
-              >
-                <CircleHelp className="ml-0.5 inline h-3 w-3 text-muted-foreground/60" />
-              </UiTooltip>
-            )}
-            <span className="ml-1 text-muted-foreground">
-              {currentAge != null
-                ? `(${currentAge + seg.start}歳〜${currentAge + seg.end}歳)`
-                : `(${currentYear + seg.start}〜${currentYear + seg.end})`}
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-xs">
+      {segments.map((seg, i) => {
+        const years = seg.end - seg.start;
+        const period =
+          currentAge != null
+            ? `${currentAge + seg.start}〜${currentAge + seg.end}歳`
+            : `${currentYear + seg.start}〜${currentYear + seg.end}`;
+        return (
+          <Fragment key={`${seg.type}-${seg.start}`}>
+            {i > 0 && <span className="text-muted-foreground/40">→</span>}
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 ${phaseChipStyles[seg.type]}`}
+            >
+              <span className="inline-flex items-center">
+                {phaseLabels[seg.type]}
+                {seg.type === "idle" && (
+                  <UiTooltip
+                    content="追加投資せず、既存の資産を運用のみ続ける期間"
+                    aria-label="据え置きの説明"
+                  >
+                    <CircleHelp className="ml-0.5 h-3 w-3 text-muted-foreground/60" />
+                  </UiTooltip>
+                )}
+              </span>
+              <span className="tabular-nums">{years}年</span>
+              <span className="text-muted-foreground tabular-nums">({period})</span>
             </span>
-          </span>
-        </Fragment>
-      ))}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -362,7 +374,7 @@ export function CompoundSimulator({
   defaultInflationRate = 2,
   defaultWithdrawalMode = "amount",
   defaultWithdrawalRate = 4,
-  defaultMonthlyWithdrawal = 200000,
+  defaultMonthlyWithdrawal = 250000,
   defaultWithdrawalYears = 30,
   defaultCurrentAge,
   title = "複利シミュレーター",
@@ -384,10 +396,22 @@ export function CompoundSimulator({
   const [inflationAdjustedWithdrawal, setInflationAdjustedWithdrawal] = useState(false);
   const [currentAge, setCurrentAge] = useState<number | undefined>(defaultCurrentAge);
   const [selectedPreset, setSelectedPreset] = useState("custom");
-  const [monthlyPensionIncome, setMonthlyPensionIncome] = useState(0);
+  const [basePension, setBasePension] = useState(0);
+  const [pensionStartAge, setPensionStartAge] = useState(65);
+  const [monthlyOtherIncome, setMonthlyOtherIncome] = useState(0);
   const [drawdownPercentile, setDrawdownPercentile] = useState<
     "p10" | "p25" | "p50" | "p75" | "p90"
   >("p50");
+
+  const PENSION_NET_RATE = 0.85;
+  const adjustedMonthlyPension = useMemo(
+    () => Math.round(adjustedPension(basePension, pensionStartAge) * PENSION_NET_RATE),
+    [basePension, pensionStartAge],
+  );
+  const pensionStartYear = useMemo(
+    () => (currentAge != null ? Math.max(0, pensionStartAge - currentAge) : undefined),
+    [currentAge, pensionStartAge],
+  );
 
   const handlePresetChange = (value: string) => {
     setSelectedPreset(value);
@@ -413,13 +437,20 @@ export function CompoundSimulator({
     expenseRatio,
     inflationRate,
     inflationAdjustedWithdrawal: withdrawalMode === "amount" ? inflationAdjustedWithdrawal : false,
-    monthlyPensionIncome,
+    monthlyPensionIncome: currentAge != null ? adjustedMonthlyPension : 0,
+    pensionStartYear,
+    monthlyOtherIncome,
   });
 
   const currentYear = new Date().getFullYear();
   const summaryYear = computeSummaryYear(contributionYears, withdrawalStartYear, withdrawalYears);
   const contributionEnd =
     projections.find((p) => p.year === summaryYear) ?? projections.find((p) => p.year === 0);
+
+  const SENSITIVITY_CONTRIBUTION_DELTAS = [
+    -20_000, -10_000, 0, 10_000, 20_000, 30_000, 50_000, 100_000, 200_000, 300_000,
+  ];
+  const SENSITIVITY_RATE_DELTAS = [-3, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2];
 
   const [monteCarlo, requestImmediateMC] = useMonteCarloSimulator({
     initialAmount,
@@ -436,10 +467,32 @@ export function CompoundSimulator({
       : { monthlyWithdrawal: fixedMonthlyWithdrawal }),
     expenseRatio,
     inflationAdjustedWithdrawal: withdrawalMode === "amount" ? inflationAdjustedWithdrawal : false,
-    monthlyPensionIncome,
+    monthlyPensionIncome: currentAge != null ? adjustedMonthlyPension : 0,
+    pensionStartYear,
+    monthlyOtherIncome,
+    ...(withdrawalYears > 0 && contributionYears > 0 && withdrawalMode === "amount"
+      ? { contributionDeltas: SENSITIVITY_CONTRIBUTION_DELTAS }
+      : {}),
+    ...(withdrawalYears > 0 && withdrawalMode === "rate"
+      ? { rateDeltas: SENSITIVITY_RATE_DELTAS }
+      : {}),
   });
 
   const fanChartData = buildFanChartData(monteCarlo.yearlyData);
+
+  const mcMedianIsZero =
+    monteCarlo.yearlyData.length > 0 && (monteCarlo.yearlyData.at(-1)?.p50 ?? 0) <= 0;
+  const securityScore = computeSecurityScore(
+    monteCarlo.depletionProbability,
+    monteCarlo.failureProbability,
+    mcMedianIsZero,
+  );
+
+  const sensitivityRows = monteCarlo.sensitivityRows ?? [];
+  const sensitivityTableRows =
+    withdrawalMode === "rate"
+      ? sensitivityRows.filter((r) => r.delta >= -0.5)
+      : sensitivityRows.filter((r) => Math.abs(r.delta) <= 30_000);
 
   const labelMap = getLabelMap(taxFree);
 
@@ -473,8 +526,12 @@ export function CompoundSimulator({
         finalPrincipal: contributionEnd.principal,
         finalInterest: contributionEnd.interest,
         monthlyWithdrawal: monthlyWithdrawalForSummary,
+        grossMonthlyExpense: withdrawalMode === "amount" ? fixedMonthlyWithdrawal : undefined,
+        monthlyPensionIncome: currentAge != null ? adjustedMonthlyPension : 0,
+        monthlyOtherIncome,
         drawdownFinalTotal: mcDrawdownEndValue,
         depletionProbability: monteCarlo.depletionProbability,
+        pensionStartYear,
         taxFree,
         withdrawalMode,
         withdrawalRate,
@@ -500,7 +557,7 @@ export function CompoundSimulator({
           <div className="sm:max-w-48 space-y-2">
             <MetricLabel
               title="現在の年齢"
-              description="設定すると、グラフやサマリーが年齢で表示されます"
+              description="設定すると、グラフやサマリーが年齢で表示され、年金の受給設定が有効になります"
             />
             <NumberField
               value={currentAge}
@@ -523,7 +580,7 @@ export function CompoundSimulator({
           />
 
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">積立設定</span>
+            <h2 className="text-base font-semibold">積立設定</h2>
             <div className="w-36">
               <Select
                 options={PRODUCT_PRESETS.map((p) => ({
@@ -703,78 +760,130 @@ export function CompoundSimulator({
             </div>
           </div>
 
-          <div>
-            <span className="text-sm font-medium">切り崩し設定</span>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+          <h2 className="text-base font-semibold">切り崩し設定</h2>
+          {/* Row 1: 引出設定 */}
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
             <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                {withdrawalMode === "rate" ? (
+                  <MetricLabel
+                    title="年間引出率"
+                    description={
+                      <div className="space-y-1.5">
+                        <p>
+                          切り崩し開始時の資産 ×
+                          引出率で初年度の引出額を決定し、翌年以降はインフレ率に応じて増額します（トリニティ・スタディ準拠）。
+                        </p>
+                        <table className="w-full text-xs">
+                          <tbody>
+                            <tr>
+                              <td className="pr-2 text-muted-foreground">初年度</td>
+                              <td>開始時資産 × 引出率</td>
+                            </tr>
+                            <tr>
+                              <td className="pr-2 text-muted-foreground">N年目</td>
+                              <td>
+                                初年度額 × (1+インフレ率)
+                                <sup>N</sup>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        {!taxFree && (
+                          <>
+                            <p className="font-medium">税金の影響</p>
+                            <p>
+                              設定した引出率の分を手取りとして受け取りますが、引き出す際に利益部分へ課税（20.315%）されます。税金分もポートフォリオから差し引かれるため、ポートフォリオからの実際の引出率は設定値を上回ります。
+                            </p>
+                            <p>
+                              例: 引出率4%・利益率30%の場合
+                              <br />→ 手取り4% + 税金(4%×30%×20.315%) ≈ 実質4.2%
+                            </p>
+                          </>
+                        )}
+                        <p>
+                          米国株式中心・税引前が前提のため、日本では課税（20.315%）や為替リスクを考慮して3%程度に抑えると安全とされています。
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          モンテカルロの結果はインフレ調整済み（実質値）で表示
+                        </p>
+                      </div>
+                    }
+                  />
+                ) : (
+                  <MetricLabel
+                    title="月額生活費総額"
+                    description={
+                      <div className="space-y-1.5">
+                        <p>
+                          毎月の消費支出額（食費・住居費・光熱費など実際に使う金額）。税金・社会保険料は含みません。ここから年金（手取り）等を差し引いた額がポートフォリオからの取崩し額になります
+                        </p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="pb-1 text-left font-medium">水準</th>
+                              <th className="pb-1 text-right font-medium">独身</th>
+                              <th className="pb-1 text-right font-medium">夫婦</th>
+                            </tr>
+                          </thead>
+                          <tbody className="tabular-nums">
+                            <tr>
+                              <td>最低限</td>
+                              <td className="text-right">12.0万</td>
+                              <td className="text-right">23.9万</td>
+                            </tr>
+                            <tr>
+                              <td>平均</td>
+                              <td className="text-right">14.9万</td>
+                              <td className="text-right">25.7万</td>
+                            </tr>
+                            <tr>
+                              <td>ゆとり</td>
+                              <td className="text-right">20.0万</td>
+                              <td className="text-right">39.1万</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <p className="text-xs text-muted-foreground">
+                          ※総務省家計調査(2024年)・生命保険文化センター調査(2025年度)ベース
+                        </p>
+                      </div>
+                    }
+                  />
+                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+                      withdrawalMode === "amount"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => {
+                      requestImmediateMC();
+                      setWithdrawalMode("amount");
+                    }}
+                  >
+                    金額指定
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium transition-colors ${
+                      withdrawalMode === "rate"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => {
+                      requestImmediateMC();
+                      setWithdrawalMode("rate");
+                    }}
+                  >
+                    %指定
+                  </button>
+                </div>
+              </div>
               {withdrawalMode === "rate" ? (
                 <>
-                  <div className="flex flex-wrap items-center justify-between gap-1">
-                    <MetricLabel
-                      title="年間引出率"
-                      description={
-                        <div className="space-y-1.5">
-                          <p>
-                            切り崩し開始時の資産 ×
-                            引出率で初年度の引出額を決定し、翌年以降はインフレ率に応じて増額します（トリニティ・スタディ準拠）。
-                          </p>
-                          <table className="w-full text-xs">
-                            <tbody>
-                              <tr>
-                                <td className="pr-2 text-muted-foreground">初年度</td>
-                                <td>開始時資産 × 引出率</td>
-                              </tr>
-                              <tr>
-                                <td className="pr-2 text-muted-foreground">N年目</td>
-                                <td>
-                                  初年度額 × (1+インフレ率)
-                                  <sup>N</sup>
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          {!taxFree && (
-                            <>
-                              <p className="font-medium">税金の影響</p>
-                              <p>
-                                設定した引出率の分を手取りとして受け取りますが、引き出す際に利益部分へ課税（20.315%）されます。税金分もポートフォリオから差し引かれるため、ポートフォリオからの実際の引出率は設定値を上回ります。
-                              </p>
-                              <p>
-                                例: 引出率4%・利益率30%の場合
-                                <br />→ 手取り4% + 税金(4%×30%×20.315%) ≈ 実質4.2%
-                              </p>
-                            </>
-                          )}
-                          <p className="text-[10px] text-muted-foreground">
-                            モンテカルロの結果はインフレ調整済み（実質値）で表示
-                          </p>
-                        </div>
-                      }
-                    />
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => {
-                          requestImmediateMC();
-                          setWithdrawalMode("amount");
-                        }}
-                      >
-                        金額指定
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground"
-                        onClick={() => {
-                          requestImmediateMC();
-                          setWithdrawalMode("rate");
-                        }}
-                      >
-                        %指定
-                      </button>
-                    </div>
-                  </div>
                   <NumberField
                     value={withdrawalRate}
                     onValueChange={(v) => setWithdrawalRate(v ?? 0)}
@@ -785,42 +894,32 @@ export function CompoundSimulator({
                     aria-label="年間引出率"
                   />
                   <p className="text-xs text-muted-foreground">
-                    初年度年額
+                    初年度年額{" "}
                     <span className="font-semibold">
-                      約{formatCurrency(monthlyWithdrawalForSummary * 12)}
+                      約
+                      {formatCurrency(
+                        Math.round(((contributionEnd?.total ?? 0) * withdrawalRate) / 100),
+                      )}
                     </span>
+                    （
+                    {formatCurrency(
+                      Math.round(((contributionEnd?.total ?? 0) * withdrawalRate) / 100 / 12),
+                    )}
+                    /月）
                   </p>
+                  {currentAge != null && (adjustedMonthlyPension > 0 || monthlyOtherIncome > 0) && (
+                    <p className="text-xs text-muted-foreground">
+                      取崩し {formatCurrency(monthlyWithdrawalForSummary)}/月 ={" "}
+                      {formatCurrency(
+                        Math.round(((contributionEnd?.total ?? 0) * withdrawalRate) / 100 / 12),
+                      )}{" "}
+                      - 年金{formatCurrency(adjustedMonthlyPension)}
+                      {monthlyOtherIncome > 0 && <> - その他{formatCurrency(monthlyOtherIncome)}</>}
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
-                  <div className="flex flex-wrap items-center justify-between gap-1">
-                    <MetricLabel
-                      title="月額引出額"
-                      description="毎月取り崩す金額（税引前）。年金収入がある場合はその分を差し引きます"
-                    />
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="rounded-md px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground"
-                        onClick={() => {
-                          requestImmediateMC();
-                          setWithdrawalMode("amount");
-                        }}
-                      >
-                        金額指定
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => {
-                          requestImmediateMC();
-                          setWithdrawalMode("rate");
-                        }}
-                      >
-                        %指定
-                      </button>
-                    </div>
-                  </div>
                   <NumberField
                     value={fixedMonthlyWithdrawal}
                     onValueChange={(v) => setFixedMonthlyWithdrawal(v ?? 0)}
@@ -828,31 +927,132 @@ export function CompoundSimulator({
                     step={10000}
                     largeStep={50000}
                     suffix="円"
-                    aria-label="月額引出額"
+                    aria-label="月額生活費総額"
                   />
                   <p className="text-xs text-muted-foreground">
                     年額 {formatCurrency(fixedMonthlyWithdrawal * 12)}
                   </p>
+                  {currentAge != null && (adjustedMonthlyPension > 0 || monthlyOtherIncome > 0) && (
+                    <p className="text-xs font-medium text-muted-foreground">
+                      取崩し{" "}
+                      {formatCurrency(
+                        Math.max(
+                          fixedMonthlyWithdrawal - adjustedMonthlyPension - monthlyOtherIncome,
+                          0,
+                        ),
+                      )}
+                      /月 = {formatCurrency(fixedMonthlyWithdrawal)} - 年金
+                      {formatCurrency(adjustedMonthlyPension)}
+                      {monthlyOtherIncome > 0 && <> - その他{formatCurrency(monthlyOtherIncome)}</>}
+                    </p>
+                  )}
                 </>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <MetricLabel
+                    title="年金月額(65歳基準)"
+                    description="税引前の額面額を入力してください。手取り率85%を自動適用します。厚生年金の平均受給額は約14.6万円/月、国民年金のみの場合は約5.8万円/月が目安です（厚生労働省統計）"
+                  />
+                  <div className="flex items-center gap-1">
+                    {[
+                      {
+                        type: "single" as const,
+                        label: "独身",
+                        pension: 146_000,
+                      },
+                      {
+                        type: "couple" as const,
+                        label: "夫婦",
+                        pension: 292_000,
+                      },
+                    ].map(({ type, label, pension }) => (
+                      <button
+                        key={type}
+                        type="button"
+                        disabled={currentAge == null}
+                        onClick={() => setBasePension(pension)}
+                        className={`rounded-md px-2 py-0.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          basePension === pension
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <NumberField
+                  value={basePension}
+                  onValueChange={(v) => setBasePension(v ?? 0)}
+                  min={0}
+                  step={10000}
+                  largeStep={50000}
+                  suffix="円"
+                  aria-label="年金月額(65歳基準)"
+                  disabled={currentAge == null}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <MetricLabel
+                    title="受給開始年齢"
+                    description={
+                      <div className="space-y-1">
+                        <p>繰上げ（60〜64歳）: 月あたり -0.4%</p>
+                        <p>繰下げ（66〜75歳）: 月あたり +0.7%</p>
+                        <p>65歳が標準受給開始年齢です</p>
+                      </div>
+                    }
+                  />
+                  <span className="text-sm font-semibold text-primary">{pensionStartAge}歳</span>
+                </div>
+                <Slider
+                  value={pensionStartAge}
+                  onValueChange={setPensionStartAge}
+                  min={60}
+                  max={75}
+                  step={1}
+                  aria-label="受給開始年齢"
+                  disabled={currentAge == null}
+                  ticks={[
+                    { value: 60, label: "60歳" },
+                    { value: 65, label: "65歳" },
+                    { value: 70, label: "70歳" },
+                    { value: 75, label: "75歳" },
+                  ]}
+                />
+              </div>
+              {currentAge == null ? (
+                <p className="text-xs text-destructive">年齢を設定すると年金が有効になります</p>
+              ) : (
+                <p className="text-xs font-medium text-muted-foreground">
+                  手取り {formatCurrency(adjustedMonthlyPension)}/月（額面の
+                  {Math.round((adjustedMonthlyPension / (basePension || 1)) * 100)}% 税金控除後）
+                </p>
               )}
             </div>
             <div className="space-y-2">
               <MetricLabel
-                title="年金等の月収"
-                description="厚生年金の平均受給額は約14.6万円/月、国民年金のみの場合は約5.6万円/月が目安です（2025年度実績）"
+                title="その他の月収"
+                description="パート収入、家賃収入などの手取り額。切り崩し開始時から常に適用されます"
               />
               <NumberField
-                value={monthlyPensionIncome}
-                onValueChange={(v) => setMonthlyPensionIncome(v ?? 0)}
+                value={monthlyOtherIncome}
+                onValueChange={(v) => setMonthlyOtherIncome(v ?? 0)}
                 min={0}
                 step={10000}
                 largeStep={50000}
                 suffix="円"
-                aria-label="年金等の月収"
+                aria-label="その他の月収"
               />
-              <p className="text-xs text-muted-foreground">引出額から差し引かれます</p>
             </div>
-            <div className="flex items-center gap-3 self-center">
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-3">
               <Switch
                 checked={!taxFree}
                 onCheckedChange={(v) => {
@@ -867,7 +1067,7 @@ export function CompoundSimulator({
               />
             </div>
             {withdrawalMode === "amount" && (
-              <div className="flex items-center gap-3 self-center">
+              <div className="flex items-center gap-3">
                 <Switch
                   checked={inflationAdjustedWithdrawal}
                   onCheckedChange={(v) => {
@@ -894,6 +1094,29 @@ export function CompoundSimulator({
         </div>
 
         <div className="rounded-lg bg-muted/50 p-4 space-y-4">
+          {withdrawalYears > 0 && (
+            <SecurityScore
+              score={securityScore}
+              currentMonthly={monthlyContribution}
+              currentRate={withdrawalRate}
+              sensitivityRows={sensitivityRows}
+              onApplyMonthly={(amount) => {
+                setMonthlyContribution(amount);
+                requestImmediateMC();
+              }}
+              onApplyRate={(rate) => {
+                setWithdrawalRate(rate);
+                requestImmediateMC();
+              }}
+            />
+          )}
+          {withdrawalYears > 0 && (
+            <SensitivityTable
+              rows={sensitivityTableRows}
+              currentMonthly={monthlyContribution}
+              currentRate={withdrawalRate}
+            />
+          )}
           {/* Timeline header */}
           <TimelinePhaseChips
             contributionYears={contributionYears}
@@ -1276,7 +1499,7 @@ export function CompoundSimulator({
         <div className="space-y-4 border-t pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h2 className="text-sm font-semibold">モンテカルロ・シミュレーション</h2>
+              <h3 className="text-sm font-semibold">モンテカルロ・シミュレーション</h3>
               <p className="text-xs text-muted-foreground">
                 5,000通りのランダムなシナリオに基づく将来予測。インフレを差し引いた実質値（今の貨幣価値に換算
                 {taxFree ? "・非課税" : withdrawalYears > 0 ? "・切り崩し税引後" : ""}
@@ -1471,6 +1694,89 @@ export function CompoundSimulator({
               )}
             </ComposedChart>
           </ResponsiveContainer>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => {
+                const effectiveReturn = annualReturnRate - expenseRatio;
+                const mcPercentiles =
+                  withdrawalYears > 0 && monteCarlo.yearlyData.length > 0
+                    ? (() => {
+                        const last = monteCarlo.yearlyData.at(-1)!;
+                        return {
+                          p10: last.p10,
+                          p25: last.p25,
+                          p50: last.p50,
+                          p75: last.p75,
+                          p90: last.p90,
+                        };
+                      })()
+                    : null;
+                const data = {
+                  settings: {
+                    currentAge,
+                    initialAmount,
+                    monthlyContribution,
+                    annualReturnRate,
+                    expenseRatio,
+                    effectiveReturn: Math.round(effectiveReturn * 100) / 100,
+                    inflationRate,
+                    realReturn: Math.round((effectiveReturn - inflationRate) * 100) / 100,
+                    volatility,
+                    contributionYears,
+                    withdrawalStartYear,
+                    withdrawalYears,
+                    withdrawalMode,
+                    ...(withdrawalMode === "rate"
+                      ? { withdrawalRate }
+                      : {
+                          fixedMonthlyWithdrawal,
+                          inflationAdjustedWithdrawal,
+                        }),
+                    taxFree,
+                    basePension,
+                    pensionStartAge,
+                    adjustedMonthlyPension: currentAge != null ? adjustedMonthlyPension : 0,
+                    pensionStartYear,
+                    monthlyOtherIncome,
+                    selectedPreset,
+                  },
+                  results: {
+                    principal: contributionEnd?.principal ?? 0,
+                    interest: contributionEnd?.interest ?? 0,
+                    tax: contributionEnd?.tax ?? 0,
+                    total: contributionEnd?.total ?? 0,
+                    monthlyWithdrawal: monthlyWithdrawalForSummary,
+                    totalWithdrawalAmount,
+                  },
+                  monteCarlo: {
+                    drawdownPercentile,
+                    mcDrawdownEndValue: mcDrawdownEndValue ?? 0,
+                    depletionProbability: monteCarlo.depletionProbability,
+                    failureProbability: monteCarlo.failureProbability,
+                    securityScore,
+                    finalPercentiles: mcPercentiles,
+                    distribution: monteCarlo.distribution,
+                  },
+                  ...(sensitivityRows.length > 0
+                    ? {
+                        sensitivity: sensitivityRows.map((r) => ({
+                          monthlyContribution: r.monthlyContribution,
+                          medianFinalBalance: r.medianFinalBalance,
+                          depletionProbability: r.depletionProbability,
+                        })),
+                      }
+                    : {}),
+                };
+                void navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+              }}
+              aria-label="設定をJSONでコピー"
+            >
+              <ClipboardCopy className="h-3.5 w-3.5" />
+              設定をコピー
+            </button>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -13,11 +13,11 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "out/**"]
+      "outputs": [".next/**", "out/**", "dist/**"]
     },
     "build:demo": {
       "dependsOn": ["^build:demo"],
-      "outputs": [".next/**", "out/**"],
+      "outputs": [".next/**", "out/**", "dist/**"],
       "cache": false
     },
     "typecheck": {
