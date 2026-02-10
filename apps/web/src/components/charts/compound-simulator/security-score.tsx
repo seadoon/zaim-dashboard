@@ -5,8 +5,8 @@ import { getSecurityLabel, type SecurityLevel } from "./compound-simulator-utils
 
 const levelStyles: Record<SecurityLevel, string> = {
   safe: "text-balance-positive",
-  caution: "text-amber-700",
-  warning: "text-amber-700",
+  caution: "text-amber-800",
+  warning: "text-amber-800",
   danger: "text-expense",
 };
 

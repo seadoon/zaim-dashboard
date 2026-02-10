@@ -1234,7 +1234,7 @@ export function CompoundSimulator({
                       monteCarlo.failureProbability > 0.2
                         ? "text-expense"
                         : monteCarlo.failureProbability > 0.05
-                          ? "text-amber-700"
+                          ? "text-amber-800"
                           : "text-balance-positive"
                     }`}
                   >
@@ -1270,7 +1270,7 @@ export function CompoundSimulator({
                       monteCarlo.depletionProbability > 0.2
                         ? "text-expense"
                         : monteCarlo.depletionProbability > 0.05
-                          ? "text-amber-700"
+                          ? "text-amber-800"
                           : "text-balance-positive"
                     }`}
                   >

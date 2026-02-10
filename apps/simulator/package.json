@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
-    "deploy": "wrangler pages deploy out --project-name mf-simulator"
+    "deploy": "wrangler pages deploy out --project-name asset-melt"
   },
   "dependencies": {
     "@next/third-parties": "16.1.6",
