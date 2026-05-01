@@ -173,7 +173,7 @@ export async function switchGroup(page: Page, groupId: string): Promise<Group | 
   // ページ遷移またはリロードを待つ
   await page.waitForLoadState("domcontentloaded");
   // グループセレクタが更新されるまで待機
-  await page.locator('select[name="group_id_hash"]').waitFor({ state: "visible", timeout: 5000 });
+  await page.locator('select[name="group_id_hash"]').waitFor({ state: "visible", timeout: 30000 });
 
   // 切り替え完了の確認（alertやnotificationの表示を待つ）
   // MoneyForwardはページ遷移で切り替わるので、新しいページでセレクタを確認
