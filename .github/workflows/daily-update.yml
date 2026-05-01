@@ -2,8 +2,8 @@ name: Money Forward Daily Update
 
 on:
   schedule:
-    # JST 6:50 → UTC 21:50 (前日)
-    - cron: "50 21 * * *"
+    # JST 6:30 → UTC 21:30 (前日)
+    - cron: "30 21 * * *"
     # JST 15:20 → UTC 6:20
     - cron: "20 6 * * *"
   workflow_dispatch:
