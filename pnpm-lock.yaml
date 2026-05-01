@@ -59,9 +59,6 @@ importers:
 
   apps/crawler:
     dependencies:
-      '@1password/sdk':
-        specifier: 0.3.1
-        version: 0.3.1
       '@moneyforward-daily-action/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -291,12 +288,6 @@ importers:
         version: 4.0.18(@types/node@25.2.2)(@vitest/browser-playwright@4.0.18)(jiti@2.6.1)(jsdom@28.0.0)(lightningcss@1.30.2)(tsx@4.21.0)
 
 packages:
-
-  '@1password/sdk-core@0.3.1':
-    resolution: {integrity: sha512-zFkbRznmE47kpke10OpO/9R0AF5csNWS+naFbadgXuFX1LlxY+2C28NSKbCXhLTqmcuWifBfPdZQ728GJ1i5xg==}
-
-  '@1password/sdk@0.3.1':
-    resolution: {integrity: sha512-20zbQfqsjcECT0gvnAw4zONJDt3XQgNH946pZR0NV1Qxukyaz/DKB0cBnBNCCEWZg93Bah8poaR6gJCyuNX14w==}
 
   '@acemir/cssom@0.9.31':
     resolution: {integrity: sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA==}
@@ -4326,12 +4317,6 @@ packages:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
 snapshots:
-
-  '@1password/sdk-core@0.3.1': {}
-
-  '@1password/sdk@0.3.1':
-    dependencies:
-      '@1password/sdk-core': 0.3.1
 
   '@acemir/cssom@0.9.31': {}
 
