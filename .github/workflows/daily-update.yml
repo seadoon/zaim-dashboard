@@ -39,6 +39,7 @@ jobs:
         with:
           mode: restore
           enabled: ${{ vars.CACHE_AUTH_STATE }}
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm --filter @moneyforward-daily-action/crawler start
         env:
           MF_EMAIL: ${{ secrets.MF_EMAIL }}
