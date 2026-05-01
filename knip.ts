@@ -2,6 +2,7 @@ import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
   ignore: ["debug/**"],
+  ignoreBinaries: ["wrangler"],
   workspaces: {
     "apps/web": {
       ignoreDependencies: ["postcss"],

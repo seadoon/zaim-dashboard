@@ -18,6 +18,7 @@ import { loginWithAuthState } from "./auth/login.js";
 import { hasAuthState } from "./auth/state.js";
 import { createBrowserContext } from "./browser/context.js";
 import { buildScrapedData, buildGroupOnlyScrapedData } from "./data-builder.js";
+import { sendDiscordNotification, sendDiscordErrorNotification } from "./discord.js";
 import { runHooks } from "./hooks/runner.js";
 import { log, debug, info, error, section, warn } from "./logger.js";
 import { scrapeAllGroups } from "./scraper.js";
@@ -156,7 +157,6 @@ async function main() {
       }
     }
 
-    // Slack通知はデフォルトグループまたは最初のグループのデータを使用
     section("Notification");
     try {
       // デフォルトグループのデータを探す、なければ最初のグループ
@@ -164,7 +164,7 @@ async function main() {
         groupDataList.find((gd) => gd.group.id === defaultGroup?.id) || groupDataList[0];
 
       if (!notifyGroupData) {
-        warn("No data available for Slack notification");
+        warn("No data available for notification");
       } else {
         // アカウント問題はデフォルトグループのアカウントから取得
         const accountIssues = notifyGroupData.registeredAccounts.accounts
@@ -180,16 +180,27 @@ async function main() {
           timeZone: "Asia/Tokyo",
         });
 
-        await sendSlackNotification({
+        const notifyPayload = {
           summary: notifyGroupData.summary,
           items: notifyGroupData.items,
           updatedAt,
           groupName: notifyGroupData.group.name,
           accountIssues,
-        });
+        };
+
+        const results = await Promise.allSettled([
+          sendSlackNotification(notifyPayload),
+          sendDiscordNotification(notifyPayload),
+        ]);
+
+        for (const result of results) {
+          if (result.status === "rejected") {
+            error("Failed to send notification:", result.reason);
+          }
+        }
       }
     } catch (err) {
-      error("Failed to send Slack notification:", err);
+      error("Failed to send notification:", err);
     }
 
     info("Completed!");
@@ -206,7 +217,15 @@ async function main() {
     // Send error notification
     if (err instanceof Error) {
       try {
-        await sendErrorNotification(err);
+        const results = await Promise.allSettled([
+          sendErrorNotification(err),
+          sendDiscordErrorNotification(err),
+        ]);
+        for (const result of results) {
+          if (result.status === "rejected") {
+            error("Failed to send error notification:", result.reason);
+          }
+        }
       } catch (err) {
         error("Failed to send error notification:", err);
       }
