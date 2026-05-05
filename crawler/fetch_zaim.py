@@ -3,6 +3,7 @@
 Zaim データ取得スクリプト
 
 pyzaim (1.x) を使って Zaim から収支データを取得し、SQLite に保存する。
+ログイン部分は WebDriverWait で独自実装し、ページ変更に対応する。
 
 pyzaim 1.x のトランザクションフィールド:
   id, date (datetime.date), type (payment/income/transfer),
@@ -20,6 +21,7 @@ import os
 import sys
 import sqlite3
 import logging
+import time
 from datetime import date, datetime
 
 logging.basicConfig(
@@ -96,7 +98,6 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
         tx_type = r.get("type", "")
 
         # pyzaim 1.x: genre = カテゴリ名, account = 口座名
-        # category は genre と同じ値を入れる（DBスキーマの互換性維持）
         genre = r.get("genre") or None
         account = r.get("account") or None
 
@@ -140,8 +141,104 @@ def get_months_to_fetch() -> list[tuple[int, int]]:
 def get_chromedriver_path() -> str:
     """webdriver-manager で ChromeDriver パスを取得する。"""
     from webdriver_manager.chrome import ChromeDriverManager
-    from webdriver_manager.core.os_manager import ChromeType
     return ChromeDriverManager().install()
+
+
+def create_crawler(zaim_id: str, zaim_password: str, driver_path: str, headless: bool = True):
+    """
+    pyzaim の ZaimCrawler インスタンスを生成する。
+    ログイン部分を独自実装し、WebDriverWait で要素を待機する。
+    """
+    from selenium.webdriver import Chrome
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from pyzaim import ZaimCrawler
+
+    options = Options()
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    if headless:
+        options.add_argument("--headless=new")
+
+    service = Service(driver_path)
+    driver = Chrome(service=service, options=options)
+
+    try:
+        log.info("Zaim ログインページを開いています...")
+        driver.get("https://id.zaim.net/")
+
+        wait = WebDriverWait(driver, 30)
+
+        # ページが JavaScript でレンダリングされるまで待機（任意の input が出るまで）
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input")))
+
+        # メールフィールドを複数のセレクターで即時チェック（ページ変更に対応）
+        email_selectors = [
+            (By.ID, "email_or_id"),
+            (By.NAME, "email_or_id"),
+            (By.CSS_SELECTOR, "input[type='email']"),
+            (By.CSS_SELECTOR, "input[autocomplete='email']"),
+            (By.CSS_SELECTOR, "input[autocomplete='username']"),
+            (By.XPATH, "//input[@type='email' or @type='text'][not(@type='hidden')]"),
+        ]
+
+        email_field = None
+        for by, selector in email_selectors:
+            try:
+                email_field = driver.find_element(by, selector)
+                log.info(f"メールフィールド発見: {by}={selector}")
+                break
+            except Exception:
+                continue
+
+        if email_field is None:
+            driver.save_screenshot("/tmp/zaim-login-debug.png")
+            log.error("ページソース (先頭2000文字):\n%s", driver.page_source[:2000])
+            raise RuntimeError("Zaim ログインページのメールフィールドが見つかりません")
+
+        email_field.clear()
+        email_field.send_keys(zaim_id)
+
+        # パスワードフィールド
+        password_selectors = [
+            (By.ID, "password"),
+            (By.NAME, "password"),
+            (By.CSS_SELECTOR, "input[type='password']"),
+        ]
+        password_field = None
+        for by, selector in password_selectors:
+            try:
+                password_field = driver.find_element(by, selector)
+                log.info(f"パスワードフィールド発見: {by}={selector}")
+                break
+            except Exception:
+                continue
+
+        if password_field is None:
+            driver.save_screenshot("/tmp/zaim-login-debug.png")
+            raise RuntimeError("Zaim ログインページのパスワードフィールドが見つかりません")
+
+        password_field.send_keys(zaim_password, Keys.ENTER)
+
+        # ログイン後のページ遷移を待機
+        time.sleep(3)
+        log.info("ログイン完了 (URL: %s)", driver.current_url)
+
+    except Exception:
+        driver.quit()
+        raise
+
+    # pyzaim の ZaimCrawler インスタンスを手動構築（ログインは上で完了済み）
+    crawler = ZaimCrawler.__new__(ZaimCrawler)
+    crawler.driver = driver
+    crawler.data = []
+    crawler.current = 0
+    return crawler
 
 
 def main() -> None:
@@ -163,9 +260,7 @@ def main() -> None:
     log.info(f"ChromeDriver: {driver_path}")
 
     log.info("Zaim クローラーを初期化中...")
-    from pyzaim import ZaimCrawler  # noqa: PLC0415
-
-    crawler = ZaimCrawler(zaim_id, zaim_password, driver_path=driver_path, headless=True)
+    crawler = create_crawler(zaim_id, zaim_password, driver_path, headless=True)
 
     conn = sqlite3.connect(db_path)
     init_db(conn)
