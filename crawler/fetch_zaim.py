@@ -168,7 +168,8 @@ def get_chromedriver_path() -> str:
 def create_crawler(zaim_id: str, zaim_password: str, driver_path: str, headless: bool = True):
     """
     pyzaim の ZaimCrawler インスタンスを生成する。
-    ログイン部分を独自実装し、WebDriverWait で要素を待機する。
+    zaim.net から始めてリダイレクト先でログインし、
+    zaim.net に戻るまで待機してセッションを確立する。
     """
     from selenium.webdriver import Chrome
     from selenium.webdriver.chrome.options import Options
@@ -190,29 +191,31 @@ def create_crawler(zaim_id: str, zaim_password: str, driver_path: str, headless:
     driver = Chrome(service=service, options=options)
 
     try:
-        log.info("Zaim ログインページを開いています...")
-        driver.get("https://id.zaim.net/")
+        # zaim.net/money から開始 → 未ログイン時は id.kufu.jp へリダイレクトされる
+        log.info("zaim.net にアクセス中...")
+        driver.get("https://zaim.net/money")
 
         wait = WebDriverWait(driver, 30)
 
-        # ページが JavaScript でレンダリングされるまで待機（任意の input が出るまで）
+        # ログインページ (id.kufu.jp) の input が現れるまで待機
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input")))
+        log.info("ログインページ URL: %s", driver.current_url)
 
-        # メールフィールドを複数のセレクターで即時チェック（ページ変更に対応）
+        # メールフィールドを複数のセレクターで即時チェック
         email_selectors = [
             (By.ID, "email_or_id"),
             (By.NAME, "email_or_id"),
+            (By.CSS_SELECTOR, "input.kufu-input:not([type='password'])"),
             (By.CSS_SELECTOR, "input[type='email']"),
             (By.CSS_SELECTOR, "input[autocomplete='email']"),
-            (By.CSS_SELECTOR, "input[autocomplete='username']"),
-            (By.XPATH, "//input[@type='email' or @type='text'][not(@type='hidden')]"),
+            (By.XPATH, "//input[not(@type='password') and not(@type='hidden')]"),
         ]
 
         email_field = None
         for by, selector in email_selectors:
             try:
                 email_field = driver.find_element(by, selector)
-                log.info(f"メールフィールド発見: {by}={selector}")
+                log.info("メールフィールド発見: %s=%s", by, selector)
                 break
             except Exception:
                 continue
@@ -226,16 +229,15 @@ def create_crawler(zaim_id: str, zaim_password: str, driver_path: str, headless:
         email_field.send_keys(zaim_id)
 
         # パスワードフィールド
-        password_selectors = [
+        password_field = None
+        for by, selector in [
             (By.ID, "password"),
             (By.NAME, "password"),
             (By.CSS_SELECTOR, "input[type='password']"),
-        ]
-        password_field = None
-        for by, selector in password_selectors:
+        ]:
             try:
                 password_field = driver.find_element(by, selector)
-                log.info(f"パスワードフィールド発見: {by}={selector}")
+                log.info("パスワードフィールド発見: %s=%s", by, selector)
                 break
             except Exception:
                 continue
@@ -246,11 +248,12 @@ def create_crawler(zaim_id: str, zaim_password: str, driver_path: str, headless:
 
         password_field.send_keys(zaim_password, Keys.ENTER)
 
-        # ログイン後のページ遷移を待機
-        time.sleep(3)
+        # ログイン後に zaim.net に戻るまで待機（id.kufu.jp → zaim.net のリダイレクト完了）
+        wait.until(lambda d: "zaim.net" in d.current_url and "id." not in d.current_url)
         log.info("ログイン完了 (URL: %s)", driver.current_url)
 
     except Exception:
+        log.error("ログイン失敗。現在 URL: %s", driver.current_url)
         driver.quit()
         raise
 
