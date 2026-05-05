@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node
-      - run: pnpm --filter @moneyforward-daily-action/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @moneyforward-daily-action/web exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e:web
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
