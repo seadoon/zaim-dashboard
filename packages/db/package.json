@@ -6,8 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/schema.ts",
-    "./utils": "./src/utils.ts",
-    "./test-helpers": "./src/test-helpers.ts"
+    "./utils": "./src/utils.ts"
   },
   "scripts": {
     "build:demo": "DB_PATH=../../data/demo.db tsx src/seed.ts",

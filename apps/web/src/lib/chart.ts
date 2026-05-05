@@ -8,7 +8,7 @@ export const CHART_PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: "all", label: "全期間" },
 ];
 
-export type ComparisonPeriod = "daily" | "weekly" | "monthly";
+type ComparisonPeriod = "daily" | "weekly" | "monthly";
 
 export const COMPARISON_PERIOD_OPTIONS: { value: ComparisonPeriod; label: string }[] = [
   { value: "daily", label: "前日" },
