@@ -79,5 +79,10 @@ interface CFTabContentProps {
 
 export function CFTabContent({ summaryContent, transactionsContent }: CFTabContentProps) {
   const { activeTab } = useCFTab();
-  return activeTab === "summary" ? summaryContent : transactionsContent;
+  return (
+    <>
+      <div className={activeTab !== "summary" ? "hidden" : ""}>{summaryContent}</div>
+      <div className={activeTab !== "transactions" ? "hidden" : ""}>{transactionsContent}</div>
+    </>
+  );
 }
