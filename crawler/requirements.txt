@@ -1,2 +1,2 @@
-pyzaim==0.2.2
-python-dateutil==2.9.0
+pyzaim==1.1.0
+webdriver-manager==4.0.2

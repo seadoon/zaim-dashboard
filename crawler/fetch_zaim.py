@@ -2,10 +2,15 @@
 """
 Zaim データ取得スクリプト
 
-pyzaim を使って Zaim から収支データを取得し、SQLite に保存する。
+pyzaim (1.x) を使って Zaim から収支データを取得し、SQLite に保存する。
+
+pyzaim 1.x のトランザクションフィールド:
+  id, date (datetime.date), type (payment/income/transfer),
+  genre (カテゴリ名), account (口座名), amount (int),
+  place (店舗名), name (品目名), comment
 
 環境変数:
-  ZAIM_ID        - Zaim ログインID（メールアドレス）
+  ZAIM_ID        - Zaim ログイン ID（メールアドレス）
   ZAIM_PASSWORD  - Zaim パスワード
   DB_PATH        - SQLite DB ファイルパス (省略時: data/zaim.db)
   FETCH_MONTHS   - 取得する月数 (省略時: 3)
@@ -28,7 +33,6 @@ log = logging.getLogger(__name__)
 def get_db_path() -> str:
     if path := os.environ.get("DB_PATH"):
         return path
-    # スクリプトのあるディレクトリから data/ を探す
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(script_dir)
     data_dir = os.path.join(root_dir, "data")
@@ -89,18 +93,28 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
         else:
             record_date = str(raw_date)[:10]
 
+        tx_type = r.get("type", "")
+
+        # pyzaim 1.x: genre = カテゴリ名, account = 口座名
+        # category は genre と同じ値を入れる（DBスキーマの互換性維持）
+        genre = r.get("genre") or None
+        account = r.get("account") or None
+
+        from_account = account if tx_type in ("payment", "transfer") else None
+        to_account = account if tx_type == "income" else None
+
         conn.execute(sql, (
             r["id"],
             record_date,
-            r.get("type", ""),
-            r.get("category") or None,
-            r.get("genre") or None,
+            tx_type,
+            genre,   # category カラムにも genre を格納
+            genre,   # genre カラム
             int(r.get("amount", 0)),
             r.get("place") or None,
             r.get("name") or None,
             r.get("comment") or None,
-            r.get("from_account") or None,
-            r.get("to_account") or None,
+            from_account,
+            to_account,
             now,
             now,
         ))
@@ -110,7 +124,6 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
 
 
 def get_months_to_fetch() -> list[tuple[int, int]]:
-    """取得対象の (year, month) リストを返す（新しい順）"""
     fetch_months = int(os.environ.get("FETCH_MONTHS", "3"))
     today = date.today()
     months = []
@@ -122,6 +135,13 @@ def get_months_to_fetch() -> list[tuple[int, int]]:
             m = 12
             y -= 1
     return months
+
+
+def get_chromedriver_path() -> str:
+    """webdriver-manager で ChromeDriver パスを取得する。"""
+    from webdriver_manager.chrome import ChromeDriverManager
+    from webdriver_manager.core.os_manager import ChromeType
+    return ChromeDriverManager().install()
 
 
 def main() -> None:
@@ -138,10 +158,14 @@ def main() -> None:
     months = get_months_to_fetch()
     log.info(f"取得対象: {[f'{y}/{m:02d}' for y, m in months]}")
 
+    log.info("ChromeDriver を準備中...")
+    driver_path = get_chromedriver_path()
+    log.info(f"ChromeDriver: {driver_path}")
+
     log.info("Zaim クローラーを初期化中...")
     from pyzaim import ZaimCrawler  # noqa: PLC0415
 
-    crawler = ZaimCrawler(zaim_id, zaim_password, headless=True)
+    crawler = ZaimCrawler(zaim_id, zaim_password, driver_path=driver_path, headless=True)
 
     conn = sqlite3.connect(db_path)
     init_db(conn)
