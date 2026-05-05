@@ -11,19 +11,13 @@ out/
 
 debug/
 
-auth-state.json
-test-auth-state.json
-
-test-groups-moneyforward.db
-test-moneyforward.db*
+test-zaim.db*
 *.db-shm
 *.db-wal
 
 playwright-report
 test-results
 storybook-static/
-.playwright-mcp
-apps/crawler/tests/e2e/screenshots/
 
 .worktrees/
 docs/plans
