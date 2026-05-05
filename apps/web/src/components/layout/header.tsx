@@ -1,18 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { Menu } from "lucide-react";
 import Image from "next/image";
 import { IconButton } from "../ui/icon-button";
 import { ActionIcons } from "./action-icons";
 import { useSidebar } from "./sidebar-context";
 
-interface HeaderProps {
-  groupSelector: ReactNode;
-  notifications?: ReactNode;
-}
-
-export function Header({ groupSelector, notifications }: HeaderProps) {
+export function Header() {
   const { toggle } = useSidebar();
 
   return (
@@ -32,9 +26,9 @@ export function Header({ groupSelector, notifications }: HeaderProps) {
             height={32}
             className="hidden shrink-0 lg:block"
           />
-          <div className="flex flex-col gap-0.5">{groupSelector}</div>
+          <span className="font-semibold text-sm hidden lg:block">Zaim Dashboard</span>
         </div>
-        <ActionIcons variant="header" notifications={notifications} />
+        <ActionIcons variant="header" />
       </div>
     </header>
   );

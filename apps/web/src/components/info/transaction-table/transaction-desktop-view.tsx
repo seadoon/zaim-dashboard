@@ -40,7 +40,7 @@ export function TransactionDesktopView({
               onSort={onSort}
             />
             <SortableTableHead
-              column="description"
+              column="name"
               label="内容"
               currentSort={sortColumn}
               currentDirection={sortDirection}
@@ -61,13 +61,6 @@ export function TransactionDesktopView({
               onSort={onSort}
             />
             <SortableTableHead
-              column="accountName"
-              label="保有金融機関"
-              currentSort={sortColumn}
-              currentDirection={sortDirection}
-              onSort={onSort}
-            />
-            <SortableTableHead
               column="amount"
               label="金額"
               currentSort={sortColumn}
@@ -82,11 +75,11 @@ export function TransactionDesktopView({
             transactions.map((transaction) => (
               <TableRow
                 key={transaction.id}
-                className={cn(transaction.isTransfer && "bg-muted/30")}
+                className={cn(transaction.type === "transfer" && "bg-muted/30")}
               >
                 <TableCell className="whitespace-nowrap">{formatDate(transaction.date)}</TableCell>
                 <TableCell className="max-w-[300px] truncate">
-                  {transaction.description || "-"}
+                  {transaction.name ?? transaction.place ?? "-"}
                 </TableCell>
                 <TableCell>
                   <Badge
@@ -100,10 +93,7 @@ export function TransactionDesktopView({
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <TypeBadge type={transaction.type} isTransfer={transaction.isTransfer} />
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {transaction.accountName || "-"}
+                  <TypeBadge type={transaction.type} />
                 </TableCell>
                 <TableCell className="text-right">
                   <AmountDisplay
@@ -111,18 +101,18 @@ export function TransactionDesktopView({
                     type={
                       transaction.type === "income"
                         ? "income"
-                        : transaction.type === "expense"
+                        : transaction.type === "payment"
                           ? "expense"
                           : "neutral"
                     }
-                    className={transaction.isTransfer ? "text-transfer" : undefined}
+                    className={transaction.type === "transfer" ? "text-transfer" : undefined}
                   />
                 </TableCell>
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={6}>
+              <TableCell colSpan={5}>
                 <EmptyState message="取引が見つかりません" />
               </TableCell>
             </TableRow>

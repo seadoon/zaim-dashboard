@@ -15,14 +15,14 @@ function getDbPath() {
   // Try cwd first, then try going up directories
   const cwdDataDir = join(process.cwd(), "data");
   if (existsSync(cwdDataDir)) {
-    return join(cwdDataDir, "moneyforward.db");
+    return join(cwdDataDir, "zaim.db");
   }
   // apps/web or apps/crawler -> monorepo root
   const rootDataDir = join(process.cwd(), "..", "..", "data");
   if (existsSync(rootDataDir)) {
-    return join(rootDataDir, "moneyforward.db");
+    return join(rootDataDir, "zaim.db");
   }
-  return join(cwdDataDir, "moneyforward.db");
+  return join(cwdDataDir, "zaim.db");
 }
 
 export function isDatabaseAvailable(): boolean {
@@ -59,15 +59,6 @@ export function initDb() {
 
 export { schema };
 
-// Shared utilities
-export * from "./shared/group-filter";
-export * from "./shared/transfer";
 export * from "./shared/utils";
-
-// Query modules
-export * from "./queries/groups";
 export * from "./queries/transaction";
 export * from "./queries/summary";
-export * from "./queries/account";
-export * from "./queries/asset";
-export * from "./queries/holding";

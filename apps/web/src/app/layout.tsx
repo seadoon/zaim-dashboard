@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { isDatabaseAvailable } from "@moneyforward-daily-action/db";
 import "./globals.css";
 import { DatabaseZap } from "lucide-react";
-import { AccountNotifications } from "../components/info/account-notifications";
-import { GroupSelector } from "../components/layout/group-selector";
 import { Header } from "../components/layout/header";
 import { Sidebar } from "../components/layout/sidebar";
 import { SidebarProvider } from "../components/layout/sidebar-context";
@@ -18,13 +16,13 @@ const metadataBase =
 export const metadata: Metadata = {
   metadataBase,
   title: {
-    template: "%s | MoneyForward Me Dashboard",
-    default: "MoneyForward Me Dashboard",
+    template: "%s | Zaim Dashboard",
+    default: "Zaim Dashboard",
   },
-  description: "MoneyForward Me のデータを可視化するダッシュボード",
+  description: "Zaim の家計データを可視化するダッシュボード",
   openGraph: {
-    title: "MoneyForward Me Dashboard",
-    description: "MoneyForward Me のデータを可視化するダッシュボード",
+    title: "Zaim Dashboard",
+    description: "Zaim の家計データを可視化するダッシュボード",
     type: "website",
     locale: "ja_JP",
     images: [
@@ -32,14 +30,14 @@ export const metadata: Metadata = {
         url: "logo.png",
         width: 758,
         height: 708,
-        alt: "MoneyForward Me Dashboard",
+        alt: "Zaim Dashboard",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "MoneyForward Me Dashboard",
-    description: "MoneyForward Me のデータを可視化するダッシュボード",
+    title: "Zaim Dashboard",
+    description: "Zaim の家計データを可視化するダッシュボード",
     images: ["logo.png"],
   },
 };
@@ -70,7 +68,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="ja">
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
         <SidebarProvider>
-          <Header groupSelector={<GroupSelector />} notifications={<AccountNotifications />} />
+          <Header />
           <div className="flex pt-14">
             <Sidebar />
             <main className="flex-1 lg:ml-60 overflow-x-hidden px-4 py-6 lg:px-8">

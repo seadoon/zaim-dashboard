@@ -24,9 +24,10 @@ export function filterTransactions(
   return transactions.filter((t) => {
     if (filters.searchText) {
       const search = filters.searchText.toLowerCase();
-      const matchDesc = t.description?.toLowerCase().includes(search);
+      const matchName = t.name?.toLowerCase().includes(search);
+      const matchPlace = t.place?.toLowerCase().includes(search);
       const matchCat = (t.category ?? "振替").toLowerCase().includes(search);
-      if (!matchDesc && !matchCat) return false;
+      if (!matchName && !matchPlace && !matchCat) return false;
     }
 
     const category = t.category ?? "振替";
@@ -38,7 +39,7 @@ export function filterTransactions(
       return false;
     }
 
-    const account = t.accountName ?? "不明";
+    const account = t.fromAccount ?? t.toAccount ?? "不明";
     if (filters.accounts.length > 0 && !filters.accounts.includes(account)) {
       return false;
     }
@@ -53,15 +54,14 @@ export function filterTransactions(
 
 const SORT_FUNCTIONS: Record<SortColumn, (a: Transaction, b: Transaction) => number> = {
   date: (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  description: (a, b) => (a.description ?? "").localeCompare(b.description ?? ""),
+  name: (a, b) => (a.name ?? "").localeCompare(b.name ?? ""),
   category: (a, b) => (a.category ?? "振替").localeCompare(b.category ?? "振替"),
   type: (a, b) => a.type.localeCompare(b.type),
   amount: (a, b) => {
-    const signedA = a.type === "expense" ? -a.amount : a.amount;
-    const signedB = b.type === "expense" ? -b.amount : b.amount;
+    const signedA = a.type === "payment" ? -a.amount : a.amount;
+    const signedB = b.type === "payment" ? -b.amount : b.amount;
     return signedA - signedB;
   },
-  accountName: (a, b) => (a.accountName ?? "").localeCompare(b.accountName ?? ""),
 };
 
 export function sortTransactions(

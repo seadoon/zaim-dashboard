@@ -6,37 +6,28 @@ import { EmptyState } from "../ui/empty-state";
 
 interface TransactionStatsProps {
   year: string;
-  groupId?: string;
 }
 
-export function TransactionStats({ year, groupId }: TransactionStatsProps) {
-  const allTransactions = getTransactions({ groupId });
-  const transactions = allTransactions.filter((t) => t.date.substring(0, 4) === year);
-
-  // Filter out excluded transactions and transfers (for expense)
-  const validTransactions = transactions.filter(
-    (t) => !t.isExcludedFromCalculation && !t.isTransfer,
+export function TransactionStats({ year }: TransactionStatsProps) {
+  const allTransactions = getTransactions();
+  const transactions = allTransactions.filter(
+    (t) => t.date.substring(0, 4) === year && t.type !== "transfer",
   );
 
-  if (validTransactions.length === 0) {
+  if (transactions.length === 0) {
     return <EmptyState icon={PieChartIcon} title="カテゴリ別内訳" />;
   }
 
-  // Category breakdown for expenses (by large category) and income (by sub-category)
   const expenseCategoryMap = new Map<string, number>();
   const incomeSubCategoryMap = new Map<string, number>();
 
-  for (const t of validTransactions) {
-    if (t.type === "expense") {
+  for (const t of transactions) {
+    if (t.type === "payment") {
       const category = t.category ?? "その他";
       expenseCategoryMap.set(category, (expenseCategoryMap.get(category) ?? 0) + t.amount);
     } else if (t.type === "income") {
-      // Use sub-category for income (since large category is mostly just "収入")
-      const subCategory = t.subCategory ?? "その他";
-      incomeSubCategoryMap.set(
-        subCategory,
-        (incomeSubCategoryMap.get(subCategory) ?? 0) + t.amount,
-      );
+      const subCategory = t.genre ?? t.category ?? "その他";
+      incomeSubCategoryMap.set(subCategory, (incomeSubCategoryMap.get(subCategory) ?? 0) + t.amount);
     }
   }
 

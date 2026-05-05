@@ -27,30 +27,32 @@ export function TransactionMobileView({ transactions }: TransactionMobileViewPro
           key={transaction.id}
           className={cn(
             "p-4 rounded-lg border bg-background",
-            transaction.isTransfer && "bg-muted/30",
+            transaction.type === "transfer" && "bg-muted/30",
           )}
         >
           <div className="flex items-start justify-between gap-3">
             <p className="text-sm font-medium text-foreground truncate">
-              {transaction.description || "-"}
+              {transaction.name ?? transaction.place ?? transaction.category ?? "-"}
             </p>
             <AmountDisplay
               amount={transaction.amount}
               type={
                 transaction.type === "income"
                   ? "income"
-                  : transaction.type === "expense"
+                  : transaction.type === "payment"
                     ? "expense"
                     : "neutral"
               }
               size="sm"
               weight="semibold"
-              className={cn("whitespace-nowrap", transaction.isTransfer && "text-transfer")}
+              className={cn("whitespace-nowrap", transaction.type === "transfer" && "text-transfer")}
             />
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             {formatDate(transaction.date)}
-            {transaction.accountName && <span> / {transaction.accountName}</span>}
+            {(transaction.fromAccount ?? transaction.toAccount) && (
+              <span> / {transaction.fromAccount ?? transaction.toAccount}</span>
+            )}
           </p>
           <div className="flex items-center gap-2 mt-2">
             <Badge
@@ -62,7 +64,7 @@ export function TransactionMobileView({ transactions }: TransactionMobileViewPro
             >
               {transaction.category ?? "振替"}
             </Badge>
-            <TypeBadge type={transaction.type} isTransfer={transaction.isTransfer} />
+            <TypeBadge type={transaction.type} />
           </div>
         </div>
       ))}

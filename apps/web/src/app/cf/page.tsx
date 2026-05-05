@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getMonthlySummaries } from "@moneyforward-daily-action/db";
-import { mfUrls } from "@moneyforward-daily-action/meta/urls";
 import { Suspense } from "react";
 import { MonthlyIncomeExpenseChart } from "../../components/info/monthly-income-expense-chart";
 import { MonthlySummaryCard } from "../../components/info/monthly-summary-card";
@@ -14,31 +13,23 @@ export const metadata: Metadata = {
   title: "収支",
 };
 
-export function CFContent({ groupId }: { groupId?: string }) {
-  const monthlySummaries = getMonthlySummaries({ groupId });
+export default function PLPage() {
+  const monthlySummaries = getMonthlySummaries();
 
-  // Group summaries by year
   const summariesByYear = monthlySummaries.reduce(
     (acc, summary) => {
       const year = summary.month.substring(0, 4);
-      if (!acc[year]) {
-        acc[year] = [];
-      }
+      if (!acc[year]) acc[year] = [];
       acc[year].push(summary);
       return acc;
     },
     {} as Record<string, typeof monthlySummaries>,
   );
 
-  // Build href with groupId prefix
-  const cfPath = groupId ? `/${groupId}/cf` : "/cf";
-
   const summaryContent = (
     <>
-      {/* Monthly chart */}
-      <MonthlyIncomeExpenseChart groupId={groupId} />
+      <MonthlyIncomeExpenseChart />
 
-      {/* Monthly summaries list by year */}
       {Object.entries(summariesByYear)
         .sort(([a], [b]) => b.localeCompare(a))
         .map(([year, summaries]) => {
@@ -50,7 +41,6 @@ export function CFContent({ groupId }: { groupId?: string }) {
             <div key={year} className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">{year}年</h2>
 
-              {/* Year cumulative summary */}
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
                 <div className="bg-card border border-border rounded-xl p-4">
                   <p className="text-sm text-muted-foreground">累計収入</p>
@@ -72,8 +62,7 @@ export function CFContent({ groupId }: { groupId?: string }) {
                 </div>
               </div>
 
-              {/* Category breakdown for the year */}
-              <TransactionStats year={year} groupId={groupId} />
+              <TransactionStats year={year} />
 
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {summaries.map((summary) => (
@@ -82,7 +71,7 @@ export function CFContent({ groupId }: { groupId?: string }) {
                     month={summary.month}
                     totalIncome={summary.totalIncome}
                     totalExpense={summary.totalExpense}
-                    href={`${cfPath}/${summary.month}/`}
+                    href={`/cf/${summary.month}/`}
                   />
                 ))}
               </div>
@@ -92,19 +81,15 @@ export function CFContent({ groupId }: { groupId?: string }) {
     </>
   );
 
-  const transactionsContent = <TransactionTable groupId={groupId} />;
+  const transactionsContent = <TransactionTable />;
 
   return (
     <Suspense>
       <CFTabProvider>
-        <PageLayout title="収支" href={mfUrls.cashFlow} options={<CFTabSelector />}>
+        <PageLayout title="収支" options={<CFTabSelector />}>
           <CFTabContent summaryContent={summaryContent} transactionsContent={transactionsContent} />
         </PageLayout>
       </CFTabProvider>
     </Suspense>
   );
-}
-
-export default function PLPage() {
-  return <CFContent />;
 }

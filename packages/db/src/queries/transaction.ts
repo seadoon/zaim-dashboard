@@ -1,115 +1,40 @@
-import { desc, eq, and, gte, sql, inArray } from "drizzle-orm";
+import { desc, like, sql, eq } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
-import { resolveGroupId, getAccountIdsForGroup } from "../shared/group-filter";
-import { transformTransferToIncome } from "../shared/transfer";
 
-export function getTransactions(options?: { limit?: number; groupId?: string }, db: Db = getDb()) {
-  const groupId = resolveGroupId(db, options?.groupId);
-  if (!groupId) return [];
-
-  const accountIds = getAccountIdsForGroup(db, groupId);
-  if (accountIds.length === 0) return [];
-
-  let query = db
-    .select({
-      id: schema.transactions.id,
-      mfId: schema.transactions.mfId,
-      date: schema.transactions.date,
-      category: schema.transactions.category,
-      subCategory: schema.transactions.subCategory,
-      description: schema.transactions.description,
-      amount: schema.transactions.amount,
-      type: schema.transactions.type,
-      isTransfer: schema.transactions.isTransfer,
-      isExcludedFromCalculation: schema.transactions.isExcludedFromCalculation,
-      accountId: schema.transactions.accountId,
-      accountName: schema.accounts.name,
-      transferTargetAccountId: schema.transactions.transferTargetAccountId,
-    })
+export function getTransactions(options?: { limit?: number }, db: Db = getDb()) {
+  const query = db
+    .select()
     .from(schema.transactions)
-    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.transactions.accountId))
-    .where(inArray(schema.transactions.accountId, accountIds))
     .orderBy(desc(schema.transactions.date));
 
-  if (options?.limit) {
-    return query
-      .limit(options.limit)
-      .all()
-      .map((t) => transformTransferToIncome(t, accountIds));
-  }
-  return query.all().map((t) => transformTransferToIncome(t, accountIds));
+  if (options?.limit) return query.limit(options.limit).all();
+  return query.all();
 }
 
-export function getTransactionsByMonth(month: string, groupIdParam?: string, db: Db = getDb()) {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return [];
-
-  const startDate = `${month}-01`;
-  const endDate = `${month}-31`;
-
-  const accountIds = getAccountIdsForGroup(db, groupId);
-  if (accountIds.length === 0) return [];
-
-  const results = db
-    .select({
-      id: schema.transactions.id,
-      mfId: schema.transactions.mfId,
-      date: schema.transactions.date,
-      category: schema.transactions.category,
-      subCategory: schema.transactions.subCategory,
-      description: schema.transactions.description,
-      amount: schema.transactions.amount,
-      type: schema.transactions.type,
-      isTransfer: schema.transactions.isTransfer,
-      isExcludedFromCalculation: schema.transactions.isExcludedFromCalculation,
-      accountId: schema.transactions.accountId,
-      accountName: schema.accounts.name,
-      transferTargetAccountId: schema.transactions.transferTargetAccountId,
-    })
+export function getTransactionsByMonth(month: string, db: Db = getDb()) {
+  return db
+    .select()
     .from(schema.transactions)
-    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.transactions.accountId))
-    .where(
-      and(
-        gte(schema.transactions.date, startDate),
-        sql`${schema.transactions.date} <= ${endDate}`,
-        inArray(schema.transactions.accountId, accountIds),
-      ),
-    )
+    .where(like(schema.transactions.date, `${month}%`))
     .orderBy(desc(schema.transactions.date))
     .all();
-
-  return results.map((t) => transformTransferToIncome(t, accountIds));
 }
 
-export function getTransactionsByAccountId(
-  accountId: number,
-  groupIdParam?: string,
-  db: Db = getDb(),
-) {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return [];
-
-  const accountIds = getAccountIdsForGroup(db, groupId);
-  if (accountIds.length === 0 || !accountIds.includes(accountId)) return [];
-
+export function getTransactionsByCategory(category: string, db: Db = getDb()) {
   return db
-    .select({
-      id: schema.transactions.id,
-      mfId: schema.transactions.mfId,
-      date: schema.transactions.date,
-      category: schema.transactions.category,
-      subCategory: schema.transactions.subCategory,
-      description: schema.transactions.description,
-      amount: schema.transactions.amount,
-      type: schema.transactions.type,
-      isTransfer: schema.transactions.isTransfer,
-      isExcludedFromCalculation: schema.transactions.isExcludedFromCalculation,
-      accountId: schema.transactions.accountId,
-      accountName: schema.accounts.name,
-    })
+    .select()
     .from(schema.transactions)
-    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.transactions.accountId))
-    .where(eq(schema.transactions.accountId, accountId))
+    .where(eq(schema.transactions.category, category))
     .orderBy(desc(schema.transactions.date))
+    .all();
+}
+
+export function getRecentTransactions(limit = 20, db: Db = getDb()) {
+  return db
+    .select()
+    .from(schema.transactions)
+    .where(sql`${schema.transactions.type} != 'transfer'`)
+    .orderBy(desc(schema.transactions.date))
+    .limit(limit)
     .all();
 }

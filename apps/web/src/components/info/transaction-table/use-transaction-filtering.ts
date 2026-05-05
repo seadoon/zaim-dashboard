@@ -8,7 +8,8 @@ interface UseTransactionFilteringOptions {
   pageSize: number;
 }
 
-const TYPE_OPTIONS = ["income", "expense", "transfer"];
+// Zaim types: "payment" = expense, "income" = income, "transfer" = transfer
+const TYPE_OPTIONS = ["income", "payment", "transfer"];
 
 function getSortedCountMap<T>(
   items: T[],
@@ -28,13 +29,12 @@ function computeTransactionKpi(transactions: Transaction[]): TransactionKpi {
   const expenseAmounts: number[] = [];
 
   for (const t of transactions) {
-    // 計算対象外のトランザクションはKPIから除外
-    if (t.isExcludedFromCalculation) continue;
+    if (t.type === "transfer") continue;
 
     if (t.type === "income") {
       totalIncome += t.amount;
       count++;
-    } else if (t.type === "expense") {
+    } else if (t.type === "payment") {
       totalExpense += t.amount;
       expenseAmounts.push(t.amount);
       count++;
@@ -80,7 +80,7 @@ export function useTransactionFiltering({
 
   // Get unique accounts with count, sorted by count descending
   const { keys: accounts, countMap: accountCount } = useMemo(
-    () => getSortedCountMap(transactions, (t) => t.accountName ?? "不明"),
+    () => getSortedCountMap(transactions, (t) => t.fromAccount ?? t.toAccount ?? "不明"),
     [transactions],
   );
 

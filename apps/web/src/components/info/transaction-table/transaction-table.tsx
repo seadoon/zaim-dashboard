@@ -1,7 +1,5 @@
-import { getAccountByMfId } from "@moneyforward-daily-action/db";
 import {
   getTransactions,
-  getTransactionsByAccountId,
   getTransactionsByMonth,
 } from "@moneyforward-daily-action/db";
 import { ListOrdered } from "lucide-react";
@@ -10,21 +8,14 @@ import { TransactionTableClient } from "./transaction-table.client";
 
 interface TransactionTableProps {
   month?: string;
-  mfId?: string;
-  groupId?: string;
 }
 
-export function TransactionTable({ month, mfId, groupId }: TransactionTableProps) {
-  const account = mfId ? getAccountByMfId(mfId, groupId) : null;
-
-  const transactions = account
-    ? getTransactionsByAccountId(account.id, groupId)
-    : month
-      ? getTransactionsByMonth(month, groupId)
-      : getTransactions({ groupId });
+export function TransactionTable({ month }: TransactionTableProps) {
+  const transactions = month
+    ? getTransactionsByMonth(month)
+    : getTransactions();
 
   if (transactions.length === 0) {
-    if (mfId) return null;
     return <EmptyState icon={ListOrdered} title="詳細一覧" />;
   }
 

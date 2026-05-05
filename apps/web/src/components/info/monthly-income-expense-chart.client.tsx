@@ -17,7 +17,6 @@ import {
 import { roundToNice } from "../../lib/chart";
 import { semanticColors } from "../../lib/colors";
 import { getShortMonth } from "../../lib/format";
-import { buildGroupPath } from "../../lib/url";
 import { ChartTooltipContent } from "../charts/chart-tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 
@@ -29,10 +28,9 @@ interface MonthlySummary {
 
 interface MonthlyIncomeExpenseChartProps {
   data: MonthlySummary[];
-  groupId?: string;
 }
 
-export function MonthlyIncomeExpenseChartClient({ data, groupId }: MonthlyIncomeExpenseChartProps) {
+export function MonthlyIncomeExpenseChartClient({ data }: MonthlyIncomeExpenseChartProps) {
   const router = useRouter();
 
   // Create a map of existing data by month
@@ -62,8 +60,7 @@ export function MonthlyIncomeExpenseChartClient({ data, groupId }: MonthlyIncome
   });
 
   const handleBarClick = (originalMonth: string) => {
-    const path = buildGroupPath(groupId, `cf/${originalMonth}`);
-    router.push(path as Route);
+    router.push(`/cf/${originalMonth}` as Route);
   };
 
   // Calculate Y axis domain based on actual income and expense ranges

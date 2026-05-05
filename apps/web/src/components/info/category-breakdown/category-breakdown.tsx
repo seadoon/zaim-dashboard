@@ -8,7 +8,6 @@ import { CategoryBreakdownClient, type CategoryData } from "./category-breakdown
 interface CategoryBreakdownProps {
   month: string;
   type: "income" | "expense";
-  groupId?: string;
 }
 
 const CONFIG = {
@@ -18,43 +17,45 @@ const CONFIG = {
 
 function getPreviousMonth(monthStr: string): string {
   const { year, month } = parseMonthString(monthStr);
-  const d = new Date(year, month - 2, 1); // month-1 is current, month-2 is previous
+  const d = new Date(year, month - 2, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function CategoryBreakdown({ month, type, groupId }: CategoryBreakdownProps) {
-  const categoryTotals = getMonthlyCategoryTotals(month, groupId);
-  const transactions = getTransactionsByMonth(month, groupId);
+// Zaim type mapping: "payment" = expense, "income" = income
+function zaimTypeToUiType(zaimType: string): "income" | "expense" | null {
+  if (zaimType === "income") return "income";
+  if (zaimType === "payment") return "expense";
+  return null;
+}
 
-  // Previous month data for delta display
+export function CategoryBreakdown({ month, type }: CategoryBreakdownProps) {
+  const categoryTotals = getMonthlyCategoryTotals(month);
+  const transactions = getTransactionsByMonth(month);
+
   const prevMonth = getPreviousMonth(month);
-  const prevCategoryTotals = getMonthlyCategoryTotals(prevMonth, groupId);
+  const prevCategoryTotals = getMonthlyCategoryTotals(prevMonth);
   const prevAmountByCategory: Record<string, number> = {};
   for (const c of prevCategoryTotals) {
-    if (c.type === type) {
-      prevAmountByCategory[c.category] = c.totalAmount;
+    const uiType = zaimTypeToUiType(c.type);
+    if (uiType === type) {
+      prevAmountByCategory[c.category] = (prevAmountByCategory[c.category] ?? 0) + c.totalAmount;
     }
   }
 
-  // Filter transactions (exclude transfers and mf-grayout)
-  const filteredTransactions = transactions.filter(
-    (tx) => !tx.isTransfer && !tx.isExcludedFromCalculation,
-  );
+  const filteredTransactions = transactions.filter((tx) => tx.type !== "transfer");
 
-  // Build sub-category grouping: { "category:type" -> { subCategory -> transactions[] } }
-  const subCategoryMap = filteredTransactions.reduce(
+  // genre = sub-category in Zaim
+  const genreMap = filteredTransactions.reduce(
     (acc, tx) => {
-      const key = `${tx.category}:${tx.type}`;
-      if (!acc[key]) {
-        acc[key] = {};
-      }
-      const sub = tx.subCategory || "未分類";
-      if (!acc[key][sub]) {
-        acc[key][sub] = [];
-      }
+      const uiType = zaimTypeToUiType(tx.type);
+      if (!uiType) return acc;
+      const key = `${tx.category}:${uiType}`;
+      if (!acc[key]) acc[key] = {};
+      const sub = tx.genre || "未分類";
+      if (!acc[key][sub]) acc[key][sub] = [];
       acc[key][sub].push({
         date: tx.date,
-        description: tx.description ?? "",
+        description: tx.name ?? tx.place ?? "",
         amount: tx.amount,
       });
       return acc;
@@ -66,7 +67,7 @@ export function CategoryBreakdown({ month, type, groupId }: CategoryBreakdownPro
   );
 
   function buildSubCategories(categoryKey: string) {
-    const subs = subCategoryMap[categoryKey] || {};
+    const subs = genreMap[categoryKey] || {};
     return Object.entries(subs)
       .map(([subCategory, txs]) => ({
         subCategory,
@@ -77,7 +78,7 @@ export function CategoryBreakdown({ month, type, groupId }: CategoryBreakdownPro
   }
 
   const data: CategoryData[] = categoryTotals
-    .filter((c) => c.type === type)
+    .filter((c) => zaimTypeToUiType(c.type) === type)
     .map((c) => ({
       category: c.category,
       amount: c.totalAmount,

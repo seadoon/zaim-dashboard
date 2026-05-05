@@ -9,25 +9,22 @@ import { MetricLabel } from "../ui/metric-label";
 
 interface MonthlyBalanceCardProps {
   className?: string;
-  groupId?: string;
 }
 
-export function MonthlyBalanceCard({ className, groupId }: MonthlyBalanceCardProps) {
-  const summary = getLatestMonthlySummary(groupId);
+export function MonthlyBalanceCard({ className }: MonthlyBalanceCardProps) {
+  const summary = getLatestMonthlySummary();
 
   if (!summary) {
     return <EmptyState icon={Calendar} title="今月の収支" />;
   }
 
   const { totalIncome, totalExpense, netIncome } = summary;
-  const recentTransactions = getTransactionsByMonth(summary.month, groupId)
-    .filter((t) => !t.isTransfer && !t.isExcludedFromCalculation)
+  const recentTransactions = getTransactionsByMonth(summary.month)
+    .filter((t) => t.type !== "transfer")
     .slice(0, 3);
 
-  const basePath = groupId ? `/${groupId}/cf` : "/cf";
-
   return (
-    <Card href={`${basePath}/${summary.month}/`} className={className}>
+    <Card href={`/cf/${summary.month}/`} className={className}>
       <CardHeader>
         <CardTitle icon={Calendar}>今月の収支</CardTitle>
       </CardHeader>
@@ -54,7 +51,7 @@ export function MonthlyBalanceCard({ className, groupId }: MonthlyBalanceCardPro
                     <span className="text-muted-foreground shrink-0">
                       {formatDateShort(t.date)}
                     </span>
-                    <span className="truncate">{t.description ?? t.category ?? "不明"}</span>
+                    <span className="truncate">{t.name ?? t.category ?? "不明"}</span>
                   </div>
                   <AmountDisplay
                     amount={t.amount}

@@ -5,27 +5,20 @@ import { SankeyDiagramClient } from "./sankey-diagram.client";
 
 interface SankeyDiagramProps {
   month: string;
-  groupId?: string;
 }
 
-export function SankeyDiagram({ month, groupId }: SankeyDiagramProps) {
-  const categoryTotals = getMonthlyCategoryTotals(month, groupId);
+export function SankeyDiagram({ month }: SankeyDiagramProps) {
+  const categoryTotals = getMonthlyCategoryTotals(month);
 
-  // Separate income and expense categories (sorted by amount desc)
   const incomeCategories = categoryTotals
     .filter((c) => c.type === "income")
-    .map((c) => ({
-      category: c.category,
-      amount: c.totalAmount,
-    }))
+    .map((c) => ({ category: c.category, amount: c.totalAmount }))
     .sort((a, b) => b.amount - a.amount);
 
+  // "payment" = expense in Zaim
   const expenseCategories = categoryTotals
-    .filter((c) => c.type === "expense")
-    .map((c) => ({
-      category: c.category,
-      amount: c.totalAmount,
-    }))
+    .filter((c) => c.type === "payment")
+    .map((c) => ({ category: c.category, amount: c.totalAmount }))
     .sort((a, b) => b.amount - a.amount);
 
   if (incomeCategories.length === 0 && expenseCategories.length === 0) {

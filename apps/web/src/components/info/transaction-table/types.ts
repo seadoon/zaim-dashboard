@@ -2,15 +2,17 @@ export interface Transaction {
   id: number;
   date: string;
   category: string | null;
-  description: string | null;
+  genre: string | null;
+  name: string | null;
+  place: string | null;
   amount: number;
-  type: string;
-  isTransfer: boolean | null;
-  isExcludedFromCalculation: boolean | null;
-  accountName: string | null;
+  type: string; // "payment" | "income" | "transfer"
+  fromAccount: string | null;
+  toAccount: string | null;
+  comment: string | null;
 }
 
-export type SortColumn = "date" | "description" | "category" | "type" | "amount" | "accountName";
+export type SortColumn = "date" | "name" | "category" | "type" | "amount";
 
 export interface TransactionKpi {
   totalIncome: number;

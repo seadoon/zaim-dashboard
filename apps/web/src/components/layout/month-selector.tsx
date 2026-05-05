@@ -4,11 +4,10 @@ import { MonthSelectorClient } from "./month-selector.client";
 interface MonthSelectorProps {
   currentMonth: string;
   basePath: string;
-  groupId?: string;
 }
 
-export function MonthSelector({ currentMonth, basePath, groupId }: MonthSelectorProps) {
-  const availableMonths = getAvailableMonths(groupId).map((m) => m.month);
+export function MonthSelector({ currentMonth, basePath }: MonthSelectorProps) {
+  const availableMonths = getAvailableMonths().map((m) => m.month);
 
   return (
     <MonthSelectorClient
