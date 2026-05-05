@@ -125,20 +125,22 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
 
 
 def _dump_page_debug(driver, year: int, month: int) -> None:
-    """失敗時に現在のページのクラス名とHTML先頭部分をログ出力する。"""
+    """失敗時に現在のページのURL・クラス名・HTMLをログ出力する。"""
     import re
     try:
+        log.error("[DEBUG] 現在URL: %s", driver.current_url)
+        # JSレンダリングをさらに待つ
+        time.sleep(3)
         html = driver.page_source
-        # list / result / item / row 系のクラス名を抽出
+        # すべてのクラス名を抽出
         all_classes = re.findall(r'class="([^"]+)"', html)
         unique = sorted({
             cls
             for group in all_classes
             for cls in group.split()
-            if any(kw in cls.lower() for kw in ["list", "result", "item", "row", "body", "money"])
         })
-        log.error("[DEBUG] 関連クラス名: %s", unique[:40])
-        log.error("[DEBUG] ページソース (先頭4000文字):\n%s", html[:4000])
+        log.error("[DEBUG] 全クラス名 (%d種): %s", len(unique), unique[:80])
+        log.error("[DEBUG] ページソース (先頭8000文字):\n%s", html[:8000])
     except Exception as e:
         log.error("[DEBUG] デバッグ情報取得失敗: %s", e)
 
