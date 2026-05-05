@@ -124,6 +124,25 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
     return count
 
 
+def _dump_page_debug(driver, year: int, month: int) -> None:
+    """失敗時に現在のページのクラス名とHTML先頭部分をログ出力する。"""
+    import re
+    try:
+        html = driver.page_source
+        # list / result / item / row 系のクラス名を抽出
+        all_classes = re.findall(r'class="([^"]+)"', html)
+        unique = sorted({
+            cls
+            for group in all_classes
+            for cls in group.split()
+            if any(kw in cls.lower() for kw in ["list", "result", "item", "row", "body", "money"])
+        })
+        log.error("[DEBUG] 関連クラス名: %s", unique[:40])
+        log.error("[DEBUG] ページソース (先頭4000文字):\n%s", html[:4000])
+    except Exception as e:
+        log.error("[DEBUG] デバッグ情報取得失敗: %s", e)
+
+
 def get_months_to_fetch() -> list[tuple[int, int]]:
     fetch_months = int(os.environ.get("FETCH_MONTHS", "3"))
     today = date.today()
@@ -276,6 +295,7 @@ def main() -> None:
                 total += count
             except Exception as exc:
                 log.error(f"{year}/{month:02d} の取得に失敗しました: {exc}")
+                _dump_page_debug(crawler.driver, year, month)
     finally:
         conn.close()
         try:
