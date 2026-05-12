@@ -43,7 +43,8 @@ export async function clickRefreshButton(page: Page): Promise<RefreshResult> {
   await page.goto(mfUrls.home);
   await page.waitForLoadState("networkidle");
 
-  const refreshButton = page.locator('a:has-text("更新")').first();
+  // Exclude customer_news links which may contain "更新" in their text
+  const refreshButton = page.locator('a:has-text("更新"):not([href*="customer_news"])').first();
   await refreshButton.click();
 
   info("Refreshing accounts...");
