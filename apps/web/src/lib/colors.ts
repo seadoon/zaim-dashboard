@@ -1,3 +1,18 @@
+const ASSET_CATEGORY_VAR_MAP: Record<string, string> = {
+  "預金・現金・暗号資産": "--color-asset-deposit",
+  "株式(現物)": "--color-asset-stock",
+  投資信託: "--color-asset-fund",
+  保険: "--color-asset-insurance",
+  年金: "--color-asset-pension",
+  "ポイント・マイル": "--color-asset-point",
+};
+
+export function getAssetCategoryColor(name: string): string {
+  const cssVar = ASSET_CATEGORY_VAR_MAP[name];
+  if (cssVar) return `var(${cssVar})`;
+  return getCategoryColor(name);
+}
+
 // Zaim カテゴリカラーマップ
 const CATEGORY_COLOR_MAP: Record<string, string> = {
   食費: "--color-cat-food",
@@ -40,4 +55,7 @@ export const semanticColors = {
   balancePositive: "var(--color-balance-positive)",
   balanceNegative: "var(--color-balance-negative)",
   transfer: "var(--color-transfer)",
+  totalAssets: "var(--color-total-assets)",
+  liability: "var(--color-liability)",
+  netAssets: "var(--color-net-assets)",
 } as const;

@@ -6,7 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/schema.ts",
-    "./utils": "./src/utils.ts"
+    "./utils": "./src/utils.ts",
+    "./types": "./src/types.ts",
+    "./repository/accounts": "./src/repositories/accounts.ts",
+    "./repository/save-scraped-data": "./src/repositories/save-scraped-data.ts"
   },
   "scripts": {
     "build:demo": "DB_PATH=../../data/demo.db tsx src/seed.ts",

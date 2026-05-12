@@ -1,0 +1,24 @@
+{
+  "name": "@zaim-dashboard/crawler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:scrape": "DEBUG=true SKIP_REFRESH=true tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moneyforward-daily-action/db": "workspace:*",
+    "@moneyforward-daily-action/meta": "workspace:*",
+    "better-sqlite3": "catalog:",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "catalog:",
+    "@types/node": "catalog:",
+    "playwright": "1.58.2",
+    "tsx": "4.21.0",
+    "typescript": "catalog:"
+  }
+}

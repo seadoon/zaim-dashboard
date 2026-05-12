@@ -62,3 +62,5 @@ export { schema };
 export * from "./shared/utils";
 export * from "./queries/transaction";
 export * from "./queries/summary";
+export * from "./queries/asset";
+export * from "./queries/holding";

@@ -57,6 +57,37 @@ importers:
         specifier: 2.8.3
         version: 2.8.3
 
+  apps/crawler:
+    dependencies:
+      '@moneyforward-daily-action/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@moneyforward-daily-action/meta':
+        specifier: workspace:*
+        version: link:../../packages/meta
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.6.2
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.1(@types/better-sqlite3@7.6.13)(better-sqlite3@12.6.2)
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 'catalog:'
+        version: 7.6.13
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.2.2
+      playwright:
+        specifier: 1.58.2
+        version: 1.58.2
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   apps/simulator:
     dependencies:
       '@next/third-parties':
@@ -105,9 +136,6 @@ importers:
       '@moneyforward-daily-action/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@moneyforward-daily-action/meta':
-        specifier: workspace:*
-        version: link:../../packages/meta
       '@nivo/sankey':
         specifier: 0.99.0
         version: 0.99.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -7237,7 +7265,7 @@ snapshots:
 
   tsx@4.21.0:
     dependencies:
-      esbuild: 0.27.2
+      esbuild: 0.27.3
       get-tsconfig: 4.13.1
     optionalDependencies:
       fsevents: 2.3.3

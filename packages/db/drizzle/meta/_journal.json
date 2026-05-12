@@ -8,6 +8,13 @@
       "when": 1770121677895,
       "tag": "0000_zaim_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1778600833565,
+      "tag": "0001_fresh_vapor",
+      "breakpoints": true
     }
   ]
 }
