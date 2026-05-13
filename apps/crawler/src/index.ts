@@ -13,7 +13,8 @@ import { loginWithAuthState } from "./auth/login.js";
 import { hasAuthState } from "./auth/state.js";
 import { createBrowserContext } from "./browser/context.js";
 import { buildScrapedData, buildGroupOnlyScrapedData } from "./data-builder.js";
-import { log, info, error, section } from "./logger.js";
+import { sendDiscordNotification, sendDiscordErrorNotification } from "./discord.js";
+import { log, info, error, section, warn } from "./logger.js";
 import { scrapeAllGroups } from "./scraper.js";
 import { scrapeInstitutionCategories } from "./scrapers/institution-categories.js";
 import { isNoGroup, NO_GROUP_ID } from "./scrapers/group.js";
@@ -80,6 +81,37 @@ async function main() {
       }
     }
 
+    section("Notification");
+    try {
+      const notifyGroupData = groupDataList.find((gd) => !isNoGroup(gd.group.id)) ?? groupDataList[0];
+      if (!notifyGroupData) {
+        warn("No data available for notification");
+      } else {
+        const accountIssues = notifyGroupData.registeredAccounts.accounts
+          .filter((a) => a.status === "updating" || a.status === "error")
+          .map((a) => ({
+            name: a.name,
+            status: a.status as "updating" | "error",
+            errorMessage: a.errorMessage,
+          }));
+
+        const now = new Date();
+        const updatedAt = now.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+
+        const notifyPayload = {
+          summary: notifyGroupData.summary,
+          items: notifyGroupData.items,
+          updatedAt,
+          groupName: notifyGroupData.group.name,
+          accountIssues,
+        };
+
+        await sendDiscordNotification(notifyPayload);
+      }
+    } catch (err) {
+      error("Failed to send notification:", err);
+    }
+
     info("Completed!");
   } catch (err) {
     error("Error occurred:", err);
@@ -88,6 +120,14 @@ async function main() {
       const screenshotPath = `error-${Date.now()}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: true });
       log(`Screenshot saved to ${screenshotPath}`);
+    }
+
+    if (err instanceof Error) {
+      try {
+        await sendDiscordErrorNotification(err);
+      } catch (notifyErr) {
+        error("Failed to send error notification:", notifyErr);
+      }
     }
 
     process.exit(1);
