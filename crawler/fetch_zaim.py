@@ -110,34 +110,27 @@ def scrape_account_balances(driver) -> list[dict]:
         asset_categories = json.loads(assets_raw)
         log.info("window.assets: %s", assets_raw)
 
-        # .home-balance から個別口座の name/value ペアを抽出
-        # img.account-lg の alt 属性から完全口座名を取得する
-        pairs = driver.execute_script(
+        # window.Accounts (完全口座名付き) と .home-balance の value div を結合
+        pair_data = driver.execute_script(
             "var sec=document.querySelector('.home-balance')||"
             " document.querySelector('[class*=\"home-balance\"]');"
-            " if(!sec) return [];"
-            " var res=[];"
-            " var els=sec.querySelectorAll('div.name,div[class^=\"value\"]');"
-            " var curName=null;"
-            " els.forEach(function(el){"
-            "   var cls=el.getAttribute('class')||'';"
-            "   if(cls==='name'){"
-            "     var anchor=el.closest('a');"
-            "     if(anchor){"
-            "       var img=anchor.querySelector('img.account-lg');"
-            "       curName=img?img.getAttribute('alt'):(el.textContent||'').trim();"
-            "     } else {"
-            "       curName=(el.textContent||'').trim();"
-            "     }"
-            "   } else if(cls.indexOf('value')===0 && curName){"
-            "     var t=(el.textContent||'').trim();"
-            "     res.push({name:curName,text:t,cls:cls});"
-            "     curName=null;"
-            "   }"
-            " });"
-            " return res;"
+            " var vals=[];"
+            " if(sec){"
+            "   sec.querySelectorAll('div[class^=\"value\"]').forEach(function(el){"
+            "     vals.push({text:(el.textContent||'').trim(),"
+            "                cls:el.getAttribute('class')||''});"
+            "   });"
+            " }"
+            " var accs=typeof window.Accounts!=='undefined'?window.Accounts:[];"
+            " return {accounts:accs,values:vals};"
         )
-        log.info("口座行数: %d", len(pairs))
+        accs = pair_data.get("accounts", [])
+        vals = pair_data.get("values", [])
+        log.info("口座数: %d  value数: %d", len(accs), len(vals))
+        pairs = [
+            {"name": a.get("name", ""), "text": v.get("text", ""), "cls": v.get("cls", "")}
+            for a, v in zip(accs, vals)
+        ]
 
         # yen テキスト ("¥1,234" や "¥-567") を整数に変換
         def parse_yen(text: str) -> int | None:
