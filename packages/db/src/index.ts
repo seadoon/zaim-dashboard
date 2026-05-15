@@ -75,6 +75,16 @@ export function initDb() {
 
   migrate(db, { migrationsFolder: join(import.meta.dirname, "../drizzle") });
 
+  // Ensure zaim_account_balances exists (created by Python Zaim crawler, may be absent in MF-only runs)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS zaim_account_balances (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_name TEXT NOT NULL,
+      balance      INTEGER NOT NULL,
+      updated_at   TEXT NOT NULL
+    )
+  `);
+
   return db;
 }
 
