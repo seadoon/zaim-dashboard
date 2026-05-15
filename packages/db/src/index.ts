@@ -85,3 +85,5 @@ export * from "./queries/transaction";
 export * from "./queries/summary";
 export * from "./queries/asset";
 export * from "./queries/holding";
+export * from "./queries/account";
+export * from "./queries/zaim";

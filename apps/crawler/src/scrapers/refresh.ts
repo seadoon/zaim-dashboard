@@ -43,8 +43,32 @@ export async function clickRefreshButton(page: Page): Promise<RefreshResult> {
   await page.goto(mfUrls.home);
   await page.waitForLoadState("networkidle");
 
-  // Exclude customer_news links which may contain "更新" in their text
-  const refreshButton = page.locator('a:has-text("更新"):not([href*="customer_news"])').first();
+  // Try multiple selectors in order — MF's UI has changed over time
+  const REFRESH_SELECTORS = [
+    'a:has-text("更新"):not([href*="customer_news"])',
+    'button:has-text("更新")',
+    '[data-action*="refresh"], [data-action*="update"]',
+    'a[href*="refresh"], a[href*="update"]:not([href*="customer_news"])',
+  ];
+
+  let refreshButton = null;
+  for (const selector of REFRESH_SELECTORS) {
+    const candidate = page.locator(selector).first();
+    try {
+      await candidate.waitFor({ state: "visible", timeout: 5000 });
+      refreshButton = candidate;
+      debug(`Refresh button found with selector: ${selector}`);
+      break;
+    } catch {
+      debug(`Selector not found: ${selector}`);
+    }
+  }
+
+  if (!refreshButton) {
+    warn("Refresh button not found with any known selector, skipping refresh");
+    return { completed: false, incompleteAccounts: [] };
+  }
+
   await refreshButton.click();
 
   info("Refreshing accounts...");

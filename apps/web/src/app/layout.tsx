@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { isDatabaseAvailable } from "@moneyforward-daily-action/db";
 import "./globals.css";
 import { DatabaseZap } from "lucide-react";
+import { AccountNotifications } from "../components/info/account-notifications";
 import { Header } from "../components/layout/header";
 import { Sidebar } from "../components/layout/sidebar";
 import { SidebarProvider } from "../components/layout/sidebar-context";
@@ -68,7 +69,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="ja">
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
         <SidebarProvider>
-          <Header />
+          <Header notifications={<AccountNotifications />} />
           <div className="flex pt-14">
             <Sidebar />
             <main className="flex-1 lg:ml-60 overflow-x-hidden px-4 py-6 lg:px-8">

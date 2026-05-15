@@ -119,6 +119,46 @@ export function getHoldingsWithDailyChange(
     .all() as HoldingWithDailyChange[];
 }
 
+export function getHoldingsByAccountId(accountId: number, groupIdParam?: string, db: Db = getDb()) {
+  const groupId = resolveGroupId(db, groupIdParam);
+  if (!groupId) return [];
+
+  const accountIds = getAccountIdsForGroup(db, groupId);
+  if (accountIds.length === 0 || !accountIds.includes(accountId)) return [];
+
+  const latestSnapshot = getLatestSnapshot(db);
+  if (!latestSnapshot) return [];
+
+  const whereCondition = buildHoldingWhereCondition(
+    latestSnapshot.id,
+    [accountId],
+  );
+
+  return db
+    .select({
+      id: schema.holdings.id,
+      name: schema.holdings.name,
+      type: schema.holdings.type,
+      liabilityCategory: schema.holdings.liabilityCategory,
+      categoryName: schema.assetCategories.name,
+      accountName: schema.accounts.name,
+      institution: schema.accounts.institution,
+      amount: schema.holdingValues.amount,
+      quantity: schema.holdingValues.quantity,
+      unitPrice: schema.holdingValues.unitPrice,
+      avgCostPrice: schema.holdingValues.avgCostPrice,
+      dailyChange: schema.holdingValues.dailyChange,
+      unrealizedGain: schema.holdingValues.unrealizedGain,
+      unrealizedGainPct: schema.holdingValues.unrealizedGainPct,
+    })
+    .from(schema.holdingValues)
+    .innerJoin(schema.holdings, eq(schema.holdings.id, schema.holdingValues.holdingId))
+    .leftJoin(schema.assetCategories, eq(schema.assetCategories.id, schema.holdings.categoryId))
+    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.holdings.accountId))
+    .where(whereCondition)
+    .all();
+}
+
 export function hasInvestmentHoldings(groupIdParam?: string, db: Db = getDb()) {
   const holdings = getHoldingsWithLatestValues(groupIdParam, db);
   return holdings.some(

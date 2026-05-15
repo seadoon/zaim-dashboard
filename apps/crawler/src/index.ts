@@ -1,4 +1,13 @@
-import { initDb, closeDb } from "@moneyforward-daily-action/db";
+import {
+  initDb,
+  closeDb,
+  getZaimBankTotal,
+  getZaimBankItems,
+  getMfSecuritiesTotal,
+  getMfSecuritiesItems,
+  getMfSecuritiesDailyChange,
+  getMfSecuritiesAccountIssues,
+} from "@moneyforward-daily-action/db";
 import {
   buildAccountIdMap,
   updateAccountCategory,
@@ -87,23 +96,31 @@ async function main() {
       if (!notifyGroupData) {
         warn("No data available for notification");
       } else {
-        const accountIssues = notifyGroupData.registeredAccounts.accounts
-          .filter((a) => a.status === "updating" || a.status === "error")
-          .map((a) => ({
-            name: a.name,
-            status: a.status as "updating" | "error",
-            errorMessage: a.errorMessage,
-          }));
+        const zaimBankTotal = getZaimBankTotal(db);
+        const zaimBankItems = getZaimBankItems(db);
+        const mfSecuritiesTotal = getMfSecuritiesTotal(db);
+        const mfSecuritiesItems = getMfSecuritiesItems(db);
+        const dailyChange = getMfSecuritiesDailyChange(db);
+        const securitiesIssues = getMfSecuritiesAccountIssues(db).map((a) => ({
+          name: a.name,
+          status: a.status as "updating" | "error",
+          errorMessage: a.errorMessage,
+        }));
 
         const now = new Date();
         const updatedAt = now.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
         const notifyPayload = {
-          summary: notifyGroupData.summary,
-          items: notifyGroupData.items,
+          combinedTotal: zaimBankTotal + mfSecuritiesTotal,
+          zaimBankTotal,
+          mfSecuritiesTotal,
+          zaimBankItems,
+          mfSecuritiesItems,
+          dailyChange,
+          monthlyChange: notifyGroupData.summary.monthlyChange,
+          monthlyChangePercent: notifyGroupData.summary.monthlyChangePercent,
           updatedAt,
-          groupName: notifyGroupData.group.name,
-          accountIssues,
+          accountIssues: securitiesIssues,
         };
 
         await sendDiscordNotification(notifyPayload);

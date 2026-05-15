@@ -1,23 +1,22 @@
 "use client";
 
 import type { Route } from "next";
-import { LayoutDashboard, TrendingUp, X } from "lucide-react";
+import { LayoutDashboard, TrendingUp, PiggyBank, Landmark, Calculator, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { buildGroupPath, extractGroupIdFromPath, isNavItemActive } from "../../lib/url";
 import { cn } from "../../lib/utils";
 import { IconButton } from "../ui/icon-button";
 import { ActionIcons } from "./action-icons";
 import { useSidebar } from "./sidebar-context";
 
 const navItems = [
-  { title: "ダッシュボード", path: "/", icon: LayoutDashboard },
-  { title: "収支", path: "/cf", icon: TrendingUp },
+  { title: "ダッシュボード", path: "", icon: LayoutDashboard },
+  { title: "収支", path: "cf", icon: TrendingUp },
+  { title: "資産", path: "bs", icon: PiggyBank },
+  { title: "連携サービス", path: "accounts", icon: Landmark },
+  { title: "シミュレーター", path: "simulator", icon: Calculator },
 ];
-
-function isActive(pathname: string, path: string): boolean {
-  if (path === "/") return pathname === "/";
-  return pathname === path || pathname.startsWith(`${path}/`);
-}
 
 export function Sidebar() {
   const { isOpen, close } = useSidebar();
@@ -62,27 +61,32 @@ interface NavContentProps {
 
 function NavContent({ onItemClick }: NavContentProps) {
   const pathname = usePathname();
+  const groupId = extractGroupIdFromPath(pathname);
 
   return (
     <div className="flex flex-col h-full">
       <nav className="space-y-1 p-4 flex-1">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path as Route}
-            onClick={onItemClick}
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-              isActive(pathname, item.path)
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "text-foreground/70 hover:bg-muted hover:text-foreground",
-            )}
-            scroll
-          >
-            <item.icon className="h-5 w-5" />
-            {item.title}
-          </Link>
-        ))}
+        {navItems.map((item) => {
+          const href = buildGroupPath(groupId, item.path);
+          const isActive = isNavItemActive(pathname, item.path, groupId);
+          return (
+            <Link
+              key={item.path}
+              href={href as Route}
+              onClick={onItemClick}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "text-foreground/70 hover:bg-muted hover:text-foreground",
+              )}
+              scroll
+            >
+              <item.icon className="h-5 w-5" />
+              {item.title}
+            </Link>
+          );
+        })}
       </nav>
       <ActionIcons variant="sidebar" />
     </div>

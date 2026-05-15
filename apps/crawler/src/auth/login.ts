@@ -176,8 +176,8 @@ export async function login(page: Page): Promise<void> {
 
   // Navigate to Money Forward ME - will redirect to MFID for auth
   debug("Navigating to Money Forward ME...");
-  // Don't wait for full load, just start navigation
-  await page.goto(mfUrls.signIn);
+  // Use 'commit' to avoid ERR_ABORTED when MF immediately redirects to id.moneyforward.com
+  await page.goto(mfUrls.signIn, { waitUntil: "commit" });
 
   // Wait a bit for redirect to start
   await waitForUrlChange(page);

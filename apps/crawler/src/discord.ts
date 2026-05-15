@@ -91,44 +91,75 @@ async function postWebhook(webhookUrl: string, payload: DiscordWebhookPayload): 
   }
 }
 
+function formatAmount(n: number): string {
+  return `¥${n.toLocaleString("ja-JP")}`;
+}
+
+function formatDailyChange(n: number): string {
+  const sign = n >= 0 ? "+" : "";
+  return `${sign}¥${n.toLocaleString("ja-JP")}`;
+}
+
 function buildSummaryContent(data: NotificationData): string {
-  const { summary, items, updatedAt, groupName } = data;
+  const {
+    combinedTotal,
+    zaimBankTotal,
+    mfSecuritiesTotal,
+    zaimBankItems,
+    mfSecuritiesItems,
+    dailyChange,
+    monthlyChange,
+    monthlyChangePercent,
+    updatedAt,
+  } = data;
 
-  const totalItem = items.find((item) => item.name === "合計");
-  const dailyChange = totalItem?.change || "-";
-  const filteredItems = items.filter((item) => item.name !== "合計");
-
-  const headerText = groupName
-    ? `**💰 Money Forward Me 更新レポート (${groupName})**`
-    : "**💰 Money Forward Me 更新レポート**";
+  const dailyChangeText =
+    dailyChange !== null && dailyChange !== undefined
+      ? formatDailyChange(dailyChange)
+      : "-";
 
   const lines: string[] = [
-    headerText,
+    "**💰 資産更新レポート**",
     "",
     "**総資産**",
-    summary.totalAssets,
+    formatAmount(combinedTotal),
     "",
-    `**前日比** ${dailyChange}`,
-    `**今月比** ${summary.monthlyChange} (${summary.monthlyChangePercent})`,
+    `**前日比（証券）** ${dailyChangeText}`,
+    `**今月比** ${monthlyChange} (${monthlyChangePercent})`,
+    "",
+    SECTION_DIVIDER,
+    "",
+    `**銀行・カード（Zaim）** ${formatAmount(zaimBankTotal)}`,
   ];
 
-  if (filteredItems.length > 0) {
-    lines.push("", SECTION_DIVIDER, "", "**資産内訳**");
-    for (const item of filteredItems) {
-      lines.push(`${item.name}: **${item.balance}** (${item.change})`);
-    }
+  for (const item of zaimBankItems) {
+    lines.push(`• ${item.name}: ${formatAmount(item.balance)}`);
+  }
+
+  if (zaimBankItems.length === 0) {
+    lines.push("• データなし（Zaimクローラー未実行）");
+  }
+
+  lines.push("", `**証券（MoneyForward）** ${formatAmount(mfSecuritiesTotal)}`);
+
+  for (const item of mfSecuritiesItems) {
+    lines.push(`• ${item.name}: ${formatAmount(item.balance)}`);
+  }
+
+  if (mfSecuritiesItems.length === 0) {
+    lines.push("• データなし");
   }
 
   if (data.accountIssues && data.accountIssues.length > 0) {
-    lines.push("", SECTION_DIVIDER, "", "**アカウント状態**");
-    const issueLines = data.accountIssues.map((issue) => {
+    lines.push("", SECTION_DIVIDER, "", "**証券アカウント状態**");
+    for (const issue of data.accountIssues) {
       const statusLabel = issue.status === "updating" ? "更新中" : "エラー";
       if (issue.errorMessage) {
-        return `• ${issue.name} (${statusLabel}: ${issue.errorMessage})`;
+        lines.push(`• ${issue.name} (${statusLabel}: ${issue.errorMessage})`);
+      } else {
+        lines.push(`• ${issue.name} (${statusLabel})`);
       }
-      return `• ${issue.name} (${statusLabel})`;
-    });
-    lines.push(...issueLines);
+    }
   }
 
   const dashboardUrl = process.env.DASHBOARD_URL;

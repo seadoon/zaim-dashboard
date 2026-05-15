@@ -1,12 +1,17 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Menu } from "lucide-react";
 import Image from "next/image";
 import { IconButton } from "../ui/icon-button";
 import { ActionIcons } from "./action-icons";
 import { useSidebar } from "./sidebar-context";
 
-export function Header() {
+interface HeaderProps {
+  notifications?: ReactNode;
+}
+
+export function Header({ notifications }: HeaderProps) {
   const { toggle } = useSidebar();
 
   return (
@@ -28,7 +33,7 @@ export function Header() {
           />
           <span className="font-semibold text-sm hidden lg:block">Zaim Dashboard</span>
         </div>
-        <ActionIcons variant="header" />
+        <ActionIcons variant="header" notifications={notifications} />
       </div>
     </header>
   );

@@ -5,13 +5,18 @@ export interface ScrapeOptions {
 export interface AccountIssue {
   name: string;
   status: "updating" | "error";
-  errorMessage?: string;
+  errorMessage?: string | null;
 }
 
 export interface NotificationData {
-  summary: { totalAssets: string; monthlyChange: string; monthlyChangePercent: string };
-  items: { name: string; balance: string; change: string }[];
+  combinedTotal: number;
+  zaimBankTotal: number;
+  mfSecuritiesTotal: number;
+  zaimBankItems: Array<{ name: string; balance: number }>;
+  mfSecuritiesItems: Array<{ name: string; balance: number }>;
+  dailyChange: number | null;
+  monthlyChange: string;
+  monthlyChangePercent: string;
   updatedAt: string;
-  groupName?: string;
   accountIssues?: AccountIssue[];
 }

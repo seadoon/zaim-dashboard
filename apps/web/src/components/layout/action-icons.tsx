@@ -1,14 +1,16 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { RefreshCw, Github, HelpCircle } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription } from "../ui/dialog";
 import { IconButton } from "../ui/icon-button";
 
 interface ActionIconsProps {
   variant: "header" | "sidebar";
+  notifications?: ReactNode;
 }
 
-export function ActionIcons({ variant }: ActionIconsProps) {
+export function ActionIcons({ variant, notifications }: ActionIconsProps) {
   const iconSize = variant === "header" ? "h-4.5 w-4.5" : "h-5 w-5";
   const githubOrg = process.env.NEXT_PUBLIC_GITHUB_ORG;
   const githubRepo = process.env.NEXT_PUBLIC_GITHUB_REPO;
@@ -29,6 +31,7 @@ export function ActionIcons({ variant }: ActionIconsProps) {
   return (
     <div className="flex items-center gap-1">
       <ReloadButton iconSize={iconSize} workflowUrl={workflowUrl} />
+      {notifications}
       <GitHubButton iconSize={iconSize} className="hidden lg:block" />
       <HelpButton iconSize={iconSize} className="hidden lg:block" />
     </div>

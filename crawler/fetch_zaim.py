@@ -63,8 +63,92 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS transactions_date_idx     ON transactions (date);
         CREATE INDEX IF NOT EXISTS transactions_type_idx     ON transactions (type);
         CREATE INDEX IF NOT EXISTS transactions_category_idx ON transactions (category);
+
+        CREATE TABLE IF NOT EXISTS zaim_account_balances (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_name TEXT NOT NULL,
+            balance      INTEGER NOT NULL,
+            updated_at   TEXT NOT NULL
+        );
     """)
     conn.commit()
+
+
+def scrape_account_balances(driver) -> list[dict]:
+    """Zaim の口座一覧ページから口座名と残高を取得する。"""
+    import re
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
+    accounts = []
+    try:
+        driver.get("https://zaim.net/user_accounts")
+        wait = WebDriverWait(driver, 15)
+        # ページ本体が読み込まれるまで待つ
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(3)
+
+        log.info("口座ページ URL: %s", driver.current_url)
+
+        # 口座行を複数のセレクターで探す
+        candidate_selectors = [
+            "table tbody tr",
+            "[class*='account'] li",
+            "[class*='Account'] li",
+            "li[class*='item']",
+            "[data-testid*='account']",
+        ]
+        rows = []
+        for sel in candidate_selectors:
+            rows = driver.find_elements(By.CSS_SELECTOR, sel)
+            if rows:
+                log.info("セレクター '%s' で %d 件の行を発見", sel, len(rows))
+                break
+
+        if not rows:
+            # フォールバック: ページ全体から数値パターンを抽出
+            log.warning("標準セレクターで口座行が見つかりません。ページ構造を確認します")
+            log.info("ページソース (先頭3000文字):\n%s", driver.page_source[:3000])
+            return accounts
+
+        for row in rows:
+            text = row.text.strip()
+            if not text:
+                continue
+            # 金額 (例: "1,234,567" または "-123,456") を抽出
+            amounts = re.findall(r'-?[\d,]+', text)
+            if not amounts:
+                continue
+            lines = [l.strip() for l in text.splitlines() if l.strip()]
+            if not lines:
+                continue
+            name = lines[0]
+            # 最初に見つかった数値を残高とする (カンマ除去)
+            try:
+                balance = int(amounts[0].replace(',', ''))
+            except ValueError:
+                continue
+            accounts.append({"account_name": name, "balance": balance})
+            log.info("口座: %s = %d 円", name, balance)
+
+    except Exception as exc:
+        log.error("口座残高スクレイピング失敗: %s", exc)
+
+    return accounts
+
+
+def upsert_account_balances(conn: sqlite3.Connection, accounts: list[dict]) -> int:
+    """zaim_account_balances テーブルを全件置き換え。"""
+    if not accounts:
+        return 0
+    now = datetime.now().isoformat()
+    conn.execute("DELETE FROM zaim_account_balances")
+    sql = "INSERT INTO zaim_account_balances (account_name, balance, updated_at) VALUES (?, ?, ?)"
+    for a in accounts:
+        conn.execute(sql, (a["account_name"], a["balance"], now))
+    conn.commit()
+    return len(accounts)
 
 
 def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
@@ -290,6 +374,7 @@ def main() -> None:
     init_db(conn)
 
     total = 0
+    balance_count = 0
     try:
         for year, month in months:
             log.info(f"{year}/{month:02d} を取得中...")
@@ -301,6 +386,11 @@ def main() -> None:
             except Exception as exc:
                 log.error(f"{year}/{month:02d} の取得に失敗しました: {exc}")
                 _dump_page_debug(crawler.driver, year, month)
+
+        log.info("口座残高を取得中...")
+        accounts = scrape_account_balances(crawler.driver)
+        balance_count = upsert_account_balances(conn, accounts)
+        log.info(f"口座残高: {balance_count} 件を保存しました")
     finally:
         conn.close()
         try:
@@ -308,7 +398,7 @@ def main() -> None:
         except Exception:
             pass
 
-    log.info(f"完了: 合計 {total} 件を保存しました")
+    log.info(f"完了: トランザクション {total} 件、口座残高 {balance_count} 件を保存しました")
 
 
 if __name__ == "__main__":
