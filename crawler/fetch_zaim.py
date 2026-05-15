@@ -99,7 +99,13 @@ def scrape_account_balances(driver) -> list[dict]:
                         'assetsHistoryChart','assetsPieChart','buildAssetHistory'];
             var r = {};
             keys.forEach(function(k){
-                if(window[k]!==undefined){
+                var t = typeof window[k];
+                r[k+'__type'] = t;
+                if(t === 'function'){
+                    // 関数の場合は呼び出してみる
+                    try{ r[k+'__called'] = JSON.stringify(window[k]()); }
+                    catch(e){ r[k+'__called'] = 'CALL_ERROR: '+e.message; }
+                } else if(t !== 'undefined'){
                     try{ r[k] = JSON.stringify(window[k]); }
                     catch(e){ r[k] = 'SERIALIZE_ERROR: '+e.message; }
                 }
@@ -107,7 +113,10 @@ def scrape_account_balances(driver) -> list[dict]:
             return r;
         """)
         for var_name, val in js_vars.items():
-            log.info("[JS:%s] (len=%d) %s", var_name, len(val), val[:3000])
+            if val is None:
+                log.info("[JS:%s] = undefined/None", var_name)
+            else:
+                log.info("[JS:%s] (len=%d) %s", var_name, len(str(val)), str(val)[:3000])
 
         # ── Step 2: HTML から Accounts / balance 系スクリプトブロックを抽出 ──
         html = driver.page_source
