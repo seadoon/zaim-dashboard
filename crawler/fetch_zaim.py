@@ -85,111 +85,73 @@ def scrape_account_balances(driver) -> list[dict]:
 
     accounts = []
     try:
-        # ── Step 1: money ページで JS 状態・DOM 要素・リンクを調査 ──────────────
+        # ── Step 1: money ページで JS グローバル変数を読む ──────────────────────
         driver.get("https://zaim.net/money")
         wait = WebDriverWait(driver, 20)
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(6)  # SPA の JS レンダリングを待つ
+        time.sleep(6)
 
         log.info("[STEP1] URL=%s  title=%s", driver.current_url, driver.title)
 
-        # JavaScript 状態オブジェクトの探索
-        js_state = driver.execute_script("""
+        # 前回発見した変数を全文読む
+        js_vars = driver.execute_script("""
+            var keys = ['Accounts','balanceHistoryChart','accountHistoryChart',
+                        'assetsHistoryChart','assetsPieChart','buildAssetHistory'];
             var r = {};
-            ['__INITIAL_STATE__','__NEXT_DATA__','__REDUX_STATE__','__APP_STATE__','Zaim','App'].forEach(function(k){
-                if(window[k]!==undefined) r[k]=JSON.stringify(window[k]).substring(0,600);
+            keys.forEach(function(k){
+                if(window[k]!==undefined){
+                    try{ r[k] = JSON.stringify(window[k]); }
+                    catch(e){ r[k] = 'SERIALIZE_ERROR: '+e.message; }
+                }
             });
-            r._windowKeys = Object.keys(window).filter(function(k){
-                var l=k.toLowerCase();
-                return l.includes('account')||l.includes('balance')||l.includes('zaim')||l.includes('asset');
-            }).slice(0,20);
             return r;
         """)
-        log.info("[JS状態] %s", json.dumps(js_state, ensure_ascii=False)[:3000])
+        for var_name, val in js_vars.items():
+            log.info("[JS:%s] (len=%d) %s", var_name, len(val), val[:3000])
 
-        # ページ内のすべての数値要素（金額候補）を抽出
-        yen_els = driver.execute_script("""
-            var res=[];
-            document.querySelectorAll('*').forEach(function(el){
-                if(el.children.length>0) return;
-                var t=el.textContent.trim();
-                if((/[¥￥]/.test(t)||/^[-]?[\\d,]{3,}$/.test(t)) && t.length<40){
-                    var p=el.parentElement;
-                    res.push({tag:el.tagName, cls:el.className.substring(0,60),
-                               id:el.id, text:t,
-                               parentCls:(p?p.className:'').substring(0,60)});
-                }
-            });
-            return res.slice(0,120);
-        """)
-        log.info("[金額要素 %d件]", len(yen_els))
-        for el in yen_els[:40]:
-            log.info("  %s", json.dumps(el, ensure_ascii=False))
-
-        # ページ内リンク（内部ナビゲーション候補）
-        nav_links = driver.execute_script("""
-            var res=[];
-            document.querySelectorAll('a[href]').forEach(function(a){
-                var h=a.getAttribute('href');
-                if(h&&(h.startsWith('/')||h.includes('zaim.net'))){
-                    res.push({href:h, text:a.textContent.trim().substring(0,30)});
-                }
-            });
-            return res.slice(0,60);
-        """)
-        log.info("[内部リンク %d件]:", len(nav_links))
-        for lk in nav_links[:30]:
-            log.info("  %s", json.dumps(lk, ensure_ascii=False))
-
-        # ── Step 2: セッションクッキーで API エンドポイントを直接呼び出し ────────
-        user_agent = driver.execute_script("return navigator.userAgent")
-        cookies_raw = driver.get_cookies()
-        session = req.Session()
-        for c in cookies_raw:
-            session.cookies.set(c["name"], c["value"], domain=".zaim.net")
-
-        api_headers = {
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": "https://zaim.net/money",
-            "User-Agent": user_agent,
-        }
-
-        for endpoint in [
-            "https://zaim.net/api/v2/home",
-            "https://zaim.net/api/v2/account",
-            "https://zaim.net/api/v2/accounts",
-            "https://zaim.net/api/v2/user/accounts",
-            "https://zaim.net/home.json",
-            "https://zaim.net/accounts.json",
-            "https://zaim.net/money.json",
-        ]:
-            try:
-                resp = session.get(endpoint, headers=api_headers, timeout=10, allow_redirects=False)
-                body = resp.text[:400]
-                log.info("[API] %s → %d: %s", endpoint, resp.status_code, body)
-            except Exception as e:
-                log.warning("[API] %s エラー: %s", endpoint, e)
-
-        # ── Step 3: 銀行名・キーワードでページソースを検索 ─────────────────────
+        # ── Step 2: HTML から Accounts / balance 系スクリプトブロックを抽出 ──
         html = driver.page_source
-        for kw in ["楽天銀行", "三菱UFJ", "住信SBI", "イオン銀行", "口座残高", "総資産", "手動口座", "user_account", "accountBalance", "accountName"]:
-            idx = html.find(kw)
-            if idx >= 0:
-                snippet = html[max(0, idx - 80):idx + 200].replace("\n", " ")
-                log.info("[KW:%s] 位置%d: %s", kw, idx, snippet)
+        for pattern in [r"var Accounts\s*=\s*(\[.*?\]);",
+                        r"var balanceHistoryChart\s*=\s*(\{.*?\});",
+                        r"var accountHistoryChart\s*=\s*(\{.*?\});",
+                        r'"balance"\s*:\s*(-?\d+)',
+                        r'"amount"\s*:\s*(-?\d+)']:
+            matches = re.findall(pattern, html, re.DOTALL)
+            if matches:
+                log.info("[RE:%s] %d件: %s", pattern[:40], len(matches),
+                         str(matches[:5])[:500])
 
-        # ── Step 4: /accounts URL を試す ─────────────────────────────────────
-        for url in ["https://zaim.net/accounts", "https://zaim.net/account", "https://zaim.net/user_accounts"]:
-            driver.get(url)
-            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            time.sleep(3)
-            log.info("[STEP4] %s → url=%s title=%s", url, driver.current_url, driver.title)
-            page_html = driver.page_source
-            if "口座" in page_html and "残高" in page_html:
-                log.info("[STEP4] 「口座」「残高」両方あり — HTML(先頭8000):\n%s", page_html[:8000])
-            else:
-                log.info("[STEP4] 口座残高セクションなし (html_len=%d)", len(page_html))
+        # ── Step 3: /home ページを調査 ──────────────────────────────────────
+        driver.get("https://zaim.net/home")
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(5)
+        log.info("[HOME] URL=%s title=%s", driver.current_url, driver.title)
+
+        home_js = driver.execute_script("""
+            var r = {};
+            Object.keys(window).forEach(function(k){
+                var l=k.toLowerCase();
+                if(l.includes('account')||l.includes('balance')||
+                   l.includes('asset')||l.includes('zaim')){
+                    try{ r[k]=JSON.stringify(window[k]).substring(0,1500); }
+                    catch(e){ r[k]='ERR'; }
+                }
+            });
+            return r;
+        """)
+        for var_name, val in home_js.items():
+            log.info("[HOME JS:%s] %s", var_name, val[:1500])
+
+        home_html = driver.page_source
+        # Search for balance-related keywords on home page
+        for kw in ["残高", "balance", "口座", "楽天銀行", "住信SBI", "三菱UFJ"]:
+            idx = home_html.find(kw)
+            if idx >= 0:
+                snippet = home_html[max(0, idx-80):idx+300].replace("\n", " ")
+                log.info("[HOME KW:%s] 位置%d: %s", kw, idx, snippet[:400])
+
+        # ── Step 4: pyzaim ZaimCrawler の隠し属性を確認 ──────────────────────
+        log.info("[STEP4] ここまで完了")
 
     except Exception as exc:
         import traceback
