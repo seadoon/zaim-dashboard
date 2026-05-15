@@ -1,7 +1,14 @@
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { getLatestSnapshot } from "./holding";
+
+const SECURITIES_ACCOUNT_NAMES = [
+  "SBI証券",
+  "SMBC日興証券",
+  "SMBC日興証券(Next-One)",
+  "楽天証券",
+];
 
 export function getZaimBankTotal(db: Db = getDb()): number {
   const result = db.get<{ total: number }>(
@@ -28,7 +35,7 @@ export function getMfSecuritiesTotal(db: Db = getDb()): number {
     JOIN holdings h ON h.id = hv.holding_id
     JOIN accounts a ON a.id = h.account_id
     WHERE hv.snapshot_id = ${latestSnapshot.id}
-      AND a.is_active = 1
+      AND a.name IN ('SBI証券', 'SMBC日興証券', 'SMBC日興証券(Next-One)', '楽天証券')
       AND h.type = 'asset'
   `);
   return result?.total ?? 0;
@@ -46,7 +53,7 @@ export function getMfSecuritiesItems(
     JOIN holdings h ON h.id = hv.holding_id
     JOIN accounts a ON a.id = h.account_id
     WHERE hv.snapshot_id = ${latestSnapshot.id}
-      AND a.is_active = 1
+      AND a.name IN ('SBI証券', 'SMBC日興証券', 'SMBC日興証券(Next-One)', '楽天証券')
       AND h.type = 'asset'
     GROUP BY a.id, a.name
     ORDER BY balance DESC
@@ -63,7 +70,7 @@ export function getMfSecuritiesDailyChange(db: Db = getDb()): number | null {
     JOIN holdings h ON h.id = hv.holding_id
     JOIN accounts a ON a.id = h.account_id
     WHERE hv.snapshot_id = ${latestSnapshot.id}
-      AND a.is_active = 1
+      AND a.name IN ('SBI証券', 'SMBC日興証券', 'SMBC日興証券(Next-One)', '楽天証券')
       AND h.type = 'asset'
       AND hv.daily_change IS NOT NULL
   `);
@@ -84,7 +91,7 @@ export function getMfSecuritiesAccountIssues(
       schema.accountStatuses,
       eq(schema.accountStatuses.accountId, schema.accounts.id),
     )
-    .where(eq(schema.accounts.isActive, true))
+    .where(inArray(schema.accounts.name, SECURITIES_ACCOUNT_NAMES))
     .all()
     .filter((r) => r.status === "updating" || r.status === "error");
 }
