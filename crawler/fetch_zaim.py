@@ -85,82 +85,56 @@ def scrape_account_balances(driver) -> list[dict]:
 
     accounts = []
     try:
-        # ── Step 1: money ページで JS グローバル変数を読む ──────────────────────
-        driver.get("https://zaim.net/money")
+        # /home ページから口座残高を取得
+        driver.get("https://zaim.net/home")
         wait = WebDriverWait(driver, 20)
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(6)
-
-        log.info("[STEP1] URL=%s  title=%s", driver.current_url, driver.title)
-
-        # 前回発見した変数を全文読む
-        js_vars = driver.execute_script("""
-            var keys = ['Accounts','balanceHistoryChart','accountHistoryChart',
-                        'assetsHistoryChart','assetsPieChart','buildAssetHistory'];
-            var r = {};
-            keys.forEach(function(k){
-                var t = typeof window[k];
-                r[k+'__type'] = t;
-                if(t === 'function'){
-                    // 関数の場合は呼び出してみる
-                    try{ r[k+'__called'] = JSON.stringify(window[k]()); }
-                    catch(e){ r[k+'__called'] = 'CALL_ERROR: '+e.message; }
-                } else if(t !== 'undefined'){
-                    try{ r[k] = JSON.stringify(window[k]); }
-                    catch(e){ r[k] = 'SERIALIZE_ERROR: '+e.message; }
-                }
-            });
-            return r;
-        """)
-        for var_name, val in js_vars.items():
-            if val is None:
-                log.info("[JS:%s] = undefined/None", var_name)
-            else:
-                log.info("[JS:%s] (len=%d) %s", var_name, len(str(val)), str(val)[:3000])
-
-        # ── Step 2: HTML から Accounts / balance 系スクリプトブロックを抽出 ──
-        html = driver.page_source
-        for pattern in [r"var Accounts\s*=\s*(\[.*?\]);",
-                        r"var balanceHistoryChart\s*=\s*(\{.*?\});",
-                        r"var accountHistoryChart\s*=\s*(\{.*?\});",
-                        r'"balance"\s*:\s*(-?\d+)',
-                        r'"amount"\s*:\s*(-?\d+)']:
-            matches = re.findall(pattern, html, re.DOTALL)
-            if matches:
-                log.info("[RE:%s] %d件: %s", pattern[:40], len(matches),
-                         str(matches[:5])[:500])
-
-        # ── Step 3: /home ページを調査 ──────────────────────────────────────
-        driver.get("https://zaim.net/home")
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
         time.sleep(5)
-        log.info("[HOME] URL=%s title=%s", driver.current_url, driver.title)
 
-        home_js = driver.execute_script("""
-            var r = {};
-            Object.keys(window).forEach(function(k){
-                var l=k.toLowerCase();
-                if(l.includes('account')||l.includes('balance')||
-                   l.includes('asset')||l.includes('zaim')){
-                    try{ r[k]=JSON.stringify(window[k]).substring(0,1500); }
-                    catch(e){ r[k]='ERR'; }
-                }
-            });
-            return r;
+        log.info("[HOME] URL=%s  title=%s", driver.current_url, driver.title)
+
+        # window.assets でカテゴリ別残高を確認
+        assets_json = driver.execute_script("""
+            if(typeof window.assets !== 'undefined')
+                return JSON.stringify(window.assets);
+            return null;
         """)
-        for var_name, val in home_js.items():
-            log.info("[HOME JS:%s] %s", var_name, val[:1500])
+        if assets_json:
+            log.info("[window.assets] %s", assets_json)
 
-        home_html = driver.page_source
-        # Search for balance-related keywords on home page
-        for kw in ["残高", "balance", "口座", "楽天銀行", "住信SBI", "三菱UFJ"]:
-            idx = home_html.find(kw)
-            if idx >= 0:
-                snippet = home_html[max(0, idx-80):idx+300].replace("\n", " ")
-                log.info("[HOME KW:%s] 位置%d: %s", kw, idx, snippet[:400])
+        # .home-balance セクションのHTML全文をダンプして構造を把握
+        section_html = driver.execute_script("""
+            var sec = document.querySelector('.home-balance') ||
+                      document.querySelector('[class*="home-balance"]') ||
+                      document.querySelector('section.box');
+            return sec ? sec.outerHTML.substring(0, 8000) : 'NOT_FOUND';
+        """)
+        log.info("[home-balance HTML]\n%s", section_html)
 
-        # ── Step 4: pyzaim ZaimCrawler の隠し属性を確認 ──────────────────────
-        log.info("[STEP4] ここまで完了")
+        # edit_balance リンク付き口座行を抽出
+        rows = driver.execute_script("""
+            var res = [];
+            document.querySelectorAll('a[href*="edit_balance"]').forEach(function(a) {
+                var container = a.closest('li') || a.closest('div.row') || a.parentElement;
+                var img = container.querySelector('img');
+                var name = img ? img.getAttribute('alt') : a.textContent.trim();
+                // 残高テキストを探す（数字を含む最初のテキストノード）
+                var balText = '';
+                container.querySelectorAll('*').forEach(function(el) {
+                    if(el.children.length===0 && !balText) {
+                        var t = el.textContent.trim();
+                        if(/[¥￥\-]?[\d,]{2,}/.test(t) && t.length < 20) balText = t;
+                    }
+                });
+                res.push({name: name, balance: balText,
+                          html: container.outerHTML.substring(0, 300)});
+            });
+            return res;
+        """)
+        log.info("[edit_balance 行 %d件]:", len(rows))
+        for r in rows[:15]:
+            log.info("  name=%s  balance=%s", r.get("name", "")[:50], r.get("balance", ""))
+            log.info("  html=%s", r.get("html", "")[:200])
 
     except Exception as exc:
         import traceback
