@@ -77,75 +77,123 @@ def init_db(conn: sqlite3.Connection) -> None:
 def scrape_account_balances(driver) -> list[dict]:
     """Zaim の口座一覧ページから口座名と残高を取得する。"""
     import re
+    import json
+    import requests as req
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
 
-    # Zaim の口座ページ候補 (URL が変わることがあるため複数試す)
-    candidate_urls = [
-        "https://zaim.net/home",
-        "https://zaim.net/user_accounts",
-        "https://zaim.net/accounts",
-    ]
-
-    # 残高が含まれそうなURLを試す（zaim.net/money が実際のダッシュボード）
-    candidate_urls = [
-        "https://zaim.net/money",
-        "https://zaim.net/user_accounts",
-        "https://zaim.net/accounts",
-        "https://zaim.net/home",
-    ]
-
-    candidate_selectors = [
-        # 口座残高セクション向け (サイドバーや右カラム)
-        "#bs-account-list li",
-        ".account-list li",
-        "[class*='account-list'] li",
-        "[class*='AccountList'] li",
-        "[class*='user-account'] li",
-        # テーブル行
-        "#account_tbody tr",
-        "table.account tbody tr",
-        # 汎用リスト
-        "ul.account li",
-    ]
-
     accounts = []
     try:
-        for url in candidate_urls:
-            driver.get(url)
-            wait = WebDriverWait(driver, 15)
-            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            time.sleep(4)
+        # ── Step 1: money ページで JS 状態・DOM 要素・リンクを調査 ──────────────
+        driver.get("https://zaim.net/money")
+        wait = WebDriverWait(driver, 20)
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(6)  # SPA の JS レンダリングを待つ
 
-            title = driver.title
-            log.info("試行 URL: %s  タイトル: %s", driver.current_url, title)
+        log.info("[STEP1] URL=%s  title=%s", driver.current_url, driver.title)
 
-            if "見つかりません" in title or "not found" in title.lower():
-                log.warning("404のためスキップ: %s", url)
-                continue
+        # JavaScript 状態オブジェクトの探索
+        js_state = driver.execute_script("""
+            var r = {};
+            ['__INITIAL_STATE__','__NEXT_DATA__','__REDUX_STATE__','__APP_STATE__','Zaim','App'].forEach(function(k){
+                if(window[k]!==undefined) r[k]=JSON.stringify(window[k]).substring(0,600);
+            });
+            r._windowKeys = Object.keys(window).filter(function(k){
+                var l=k.toLowerCase();
+                return l.includes('account')||l.includes('balance')||l.includes('zaim')||l.includes('asset');
+            }).slice(0,20);
+            return r;
+        """)
+        log.info("[JS状態] %s", json.dumps(js_state, ensure_ascii=False)[:3000])
 
-            html = driver.page_source
-            # "残高" を含む周辺 HTML を抽出してデバッグ
-            idx = html.find("残高")
+        # ページ内のすべての数値要素（金額候補）を抽出
+        yen_els = driver.execute_script("""
+            var res=[];
+            document.querySelectorAll('*').forEach(function(el){
+                if(el.children.length>0) return;
+                var t=el.textContent.trim();
+                if((/[¥￥]/.test(t)||/^[-]?[\\d,]{3,}$/.test(t)) && t.length<40){
+                    var p=el.parentElement;
+                    res.push({tag:el.tagName, cls:el.className.substring(0,60),
+                               id:el.id, text:t,
+                               parentCls:(p?p.className:'').substring(0,60)});
+                }
+            });
+            return res.slice(0,120);
+        """)
+        log.info("[金額要素 %d件]", len(yen_els))
+        for el in yen_els[:40]:
+            log.info("  %s", json.dumps(el, ensure_ascii=False))
+
+        # ページ内リンク（内部ナビゲーション候補）
+        nav_links = driver.execute_script("""
+            var res=[];
+            document.querySelectorAll('a[href]').forEach(function(a){
+                var h=a.getAttribute('href');
+                if(h&&(h.startsWith('/')||h.includes('zaim.net'))){
+                    res.push({href:h, text:a.textContent.trim().substring(0,30)});
+                }
+            });
+            return res.slice(0,60);
+        """)
+        log.info("[内部リンク %d件]:", len(nav_links))
+        for lk in nav_links[:30]:
+            log.info("  %s", json.dumps(lk, ensure_ascii=False))
+
+        # ── Step 2: セッションクッキーで API エンドポイントを直接呼び出し ────────
+        user_agent = driver.execute_script("return navigator.userAgent")
+        cookies_raw = driver.get_cookies()
+        session = req.Session()
+        for c in cookies_raw:
+            session.cookies.set(c["name"], c["value"], domain=".zaim.net")
+
+        api_headers = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://zaim.net/money",
+            "User-Agent": user_agent,
+        }
+
+        for endpoint in [
+            "https://zaim.net/api/v2/home",
+            "https://zaim.net/api/v2/account",
+            "https://zaim.net/api/v2/accounts",
+            "https://zaim.net/api/v2/user/accounts",
+            "https://zaim.net/home.json",
+            "https://zaim.net/accounts.json",
+            "https://zaim.net/money.json",
+        ]:
+            try:
+                resp = session.get(endpoint, headers=api_headers, timeout=10, allow_redirects=False)
+                body = resp.text[:400]
+                log.info("[API] %s → %d: %s", endpoint, resp.status_code, body)
+            except Exception as e:
+                log.warning("[API] %s エラー: %s", endpoint, e)
+
+        # ── Step 3: 銀行名・キーワードでページソースを検索 ─────────────────────
+        html = driver.page_source
+        for kw in ["楽天銀行", "三菱UFJ", "住信SBI", "イオン銀行", "口座残高", "総資産", "手動口座", "user_account", "accountBalance", "accountName"]:
+            idx = html.find(kw)
             if idx >= 0:
-                log.info("'残高'発見 (位置 %d):\n%s", idx, html[max(0, idx-200):idx+500])
+                snippet = html[max(0, idx - 80):idx + 200].replace("\n", " ")
+                log.info("[KW:%s] 位置%d: %s", kw, idx, snippet)
+
+        # ── Step 4: /accounts URL を試す ─────────────────────────────────────
+        for url in ["https://zaim.net/accounts", "https://zaim.net/account", "https://zaim.net/user_accounts"]:
+            driver.get(url)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            time.sleep(3)
+            log.info("[STEP4] %s → url=%s title=%s", url, driver.current_url, driver.title)
+            page_html = driver.page_source
+            if "口座" in page_html and "残高" in page_html:
+                log.info("[STEP4] 「口座」「残高」両方あり — HTML(先頭8000):\n%s", page_html[:8000])
             else:
-                log.warning("'残高'キーワードが見つかりません — ログイン済みか確認が必要")
-                log.info("ページソース (先頭5000文字):\n%s", html[:5000])
-
-            for sel in candidate_selectors:
-                rows = driver.find_elements(By.CSS_SELECTOR, sel)
-                if rows:
-                    log.info("セレクター '%s' で %d 件発見", sel, len(rows))
-                    for r in rows[:5]:
-                        log.info("  row: %s", r.text.strip()[:100])
-                    break
-
-            break  # 最初の有効なページだけ調査
+                log.info("[STEP4] 口座残高セクションなし (html_len=%d)", len(page_html))
 
     except Exception as exc:
-        log.error("口座残高スクレイピング失敗: %s", exc)
+        import traceback
+        log.error("口座残高スクレイピング失敗: %s\n%s", exc, traceback.format_exc())
 
     return accounts
 
