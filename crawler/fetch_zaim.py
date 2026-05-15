@@ -81,35 +81,51 @@ def scrape_account_balances(driver) -> list[dict]:
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
 
+    # Zaim の口座ページ候補 (URL が変わることがあるため複数試す)
+    candidate_urls = [
+        "https://zaim.net/home",
+        "https://zaim.net/user_accounts",
+        "https://zaim.net/accounts",
+    ]
+
+    candidate_selectors = [
+        "table tbody tr",
+        "[class*='account'] li",
+        "[class*='Account'] li",
+        "li[class*='item']",
+        "[data-testid*='account']",
+        "ul li",
+    ]
+
     accounts = []
     try:
-        driver.get("https://zaim.net/user_accounts")
-        wait = WebDriverWait(driver, 15)
-        # ページ本体が読み込まれるまで待つ
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(3)
-
-        log.info("口座ページ URL: %s", driver.current_url)
-
-        # 口座行を複数のセレクターで探す
-        candidate_selectors = [
-            "table tbody tr",
-            "[class*='account'] li",
-            "[class*='Account'] li",
-            "li[class*='item']",
-            "[data-testid*='account']",
-        ]
         rows = []
-        for sel in candidate_selectors:
-            rows = driver.find_elements(By.CSS_SELECTOR, sel)
+        for url in candidate_urls:
+            driver.get(url)
+            wait = WebDriverWait(driver, 15)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            time.sleep(3)
+
+            title = driver.title
+            log.info("試行 URL: %s  タイトル: %s", driver.current_url, title)
+
+            # 404 ページはスキップ
+            if "見つかりません" in title or "not found" in title.lower():
+                log.warning("404ページのためスキップ: %s", url)
+                continue
+
+            for sel in candidate_selectors:
+                rows = driver.find_elements(By.CSS_SELECTOR, sel)
+                if rows:
+                    log.info("セレクター '%s' で %d 件の行を発見 (URL: %s)", sel, len(rows), url)
+                    break
+
             if rows:
-                log.info("セレクター '%s' で %d 件の行を発見", sel, len(rows))
                 break
 
         if not rows:
-            # フォールバック: ページ全体から数値パターンを抽出
-            log.warning("標準セレクターで口座行が見つかりません。ページ構造を確認します")
-            log.info("ページソース (先頭3000文字):\n%s", driver.page_source[:3000])
+            log.warning("全URLで口座行が見つかりませんでした")
+            log.info("最後のページソース (先頭3000文字):\n%s", driver.page_source[:3000])
             return accounts
 
         for row in rows:
@@ -124,7 +140,6 @@ def scrape_account_balances(driver) -> list[dict]:
             if not lines:
                 continue
             name = lines[0]
-            # 最初に見つかった数値を残高とする (カンマ除去)
             try:
                 balance = int(amounts[0].replace(',', ''))
             except ValueError:
