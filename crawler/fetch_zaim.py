@@ -88,6 +88,28 @@ def scrape_account_balances(driver) -> list[dict]:
         "https://zaim.net/accounts",
     ]
 
+    # 残高が含まれそうなURLを試す（zaim.net/money が実際のダッシュボード）
+    candidate_urls = [
+        "https://zaim.net/money",
+        "https://zaim.net/user_accounts",
+        "https://zaim.net/accounts",
+        "https://zaim.net/home",
+    ]
+
+    candidate_selectors = [
+        # 口座残高セクション向け (サイドバーや右カラム)
+        "#bs-account-list li",
+        ".account-list li",
+        "[class*='account-list'] li",
+        "[class*='AccountList'] li",
+        "[class*='user-account'] li",
+        # テーブル行
+        "#account_tbody tr",
+        "table.account tbody tr",
+        # 汎用リスト
+        "ul.account li",
+    ]
+
     accounts = []
     try:
         for url in candidate_urls:
@@ -103,9 +125,23 @@ def scrape_account_balances(driver) -> list[dict]:
                 log.warning("404のためスキップ: %s", url)
                 continue
 
-            # ページ構造をダンプして正しいセレクターを特定する
             html = driver.page_source
-            log.info("ページソース (先頭8000文字):\n%s", html[:8000])
+            # "残高" を含む周辺 HTML を抽出してデバッグ
+            idx = html.find("残高")
+            if idx >= 0:
+                log.info("'残高'発見 (位置 %d):\n%s", idx, html[max(0, idx-200):idx+500])
+            else:
+                log.warning("'残高'キーワードが見つかりません — ログイン済みか確認が必要")
+                log.info("ページソース (先頭5000文字):\n%s", html[:5000])
+
+            for sel in candidate_selectors:
+                rows = driver.find_elements(By.CSS_SELECTOR, sel)
+                if rows:
+                    log.info("セレクター '%s' で %d 件発見", sel, len(rows))
+                    for r in rows[:5]:
+                        log.info("  row: %s", r.text.strip()[:100])
+                    break
+
             break  # 最初の有効なページだけ調査
 
     except Exception as exc:
