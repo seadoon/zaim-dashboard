@@ -118,7 +118,8 @@ def scrape_account_balances(driver) -> list[dict]:
                 if(el.children.length===0){
                     var t = el.textContent.trim();
                     if(t.length>0 && t.length<80)
-                        texts.push({tag:el.tagName, cls:el.className.substring(0,50), text:t});
+                        var cls = typeof el.className==='string'?el.className:(el.className.baseVal||'');
+                        texts.push({tag:el.tagName, cls:cls.substring(0,50), text:t});
                 }
             });
             var altTexts = [];
