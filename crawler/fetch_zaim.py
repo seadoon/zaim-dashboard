@@ -108,48 +108,42 @@ def scrape_account_balances(driver) -> list[dict]:
         """)
         log.info("[window.assets] %s", assets_json)
 
-        # .home-balance セクションのHTML全文をダンプ
-        section_html = driver.execute_script("""
+        # .home-balance セクション内のテキストノードを全部取る
+        leaf_texts = driver.execute_script("""
             var sec = document.querySelector('.home-balance') ||
                       document.querySelector('[class*="home-balance"]');
-            if(!sec){
-                // すべての section.box を探す
-                var boxes = document.querySelectorAll('section.box');
-                var r = [];
-                boxes.forEach(function(b){ r.push(b.outerHTML.substring(0,500)); });
-                return 'BOXES:' + JSON.stringify(r);
-            }
-            return sec.outerHTML.substring(0, 8000);
+            if(!sec) return {found: false, texts: [], altTexts: []};
+            var texts = [];
+            sec.querySelectorAll('*').forEach(function(el){
+                if(el.children.length===0){
+                    var t = el.textContent.trim();
+                    if(t.length>0 && t.length<80)
+                        texts.push({tag:el.tagName, cls:el.className.substring(0,50), text:t});
+                }
+            });
+            var altTexts = [];
+            sec.querySelectorAll('img[alt]').forEach(function(img){
+                altTexts.push(img.getAttribute('alt'));
+            });
+            return {found: true, texts: texts.slice(0,100), altTexts: altTexts.slice(0,30)};
         """)
-        log.info("[home-balance HTML (len=%d)]:\n%s", len(section_html or ""), (section_html or "")[:5000])
+        log.info("[home-balance found=%s, imgs=%d, texts=%d]",
+                 leaf_texts.get("found"), len(leaf_texts.get("altTexts",[])), len(leaf_texts.get("texts",[])))
+        for t in leaf_texts.get("texts", [])[:50]:
+            log.info("  %s", json.dumps(t, ensure_ascii=False))
+        log.info("[img alt texts]: %s", json.dumps(leaf_texts.get("altTexts",[]), ensure_ascii=False))
 
-        # edit_balance リンク付き口座行を抽出
-        rows = driver.execute_script("""
+        # すべての section.box のクラスと先頭テキストを一覧表示
+        sections_info = driver.execute_script("""
             var res = [];
-            document.querySelectorAll('a[href*="edit_balance"]').forEach(function(a) {
-                var container = a.closest('li') || a.closest('div.row') || a.parentElement;
-                var img = container.querySelector('img');
-                var name = img ? img.getAttribute('alt') : a.textContent.trim();
-                var balText = '';
-                container.querySelectorAll('*').forEach(function(el) {
-                    if(el.children.length===0 && !balText) {
-                        var t = el.textContent.trim();
-                        if(/[¥￥\-]?[\d,]{2,}/.test(t) && t.length < 20) balText = t;
-                    }
-                });
-                res.push({name: name, balance: balText,
-                          html: container.outerHTML.substring(0, 400)});
+            document.querySelectorAll('section').forEach(function(s){
+                res.push({cls: s.className, text: s.textContent.trim().substring(0,100)});
             });
             return res;
         """)
-        log.info("[edit_balance 行 %d件]:", len(rows))
-        for r in rows[:15]:
-            log.info("  name=%s  balance=%s", r.get("name", "")[:60], r.get("balance", ""))
-            log.info("  html=%s", r.get("html", "")[:300])
-
-        # ページ先頭5000文字もダンプして構造把握
-        page_html = driver.page_source
-        log.info("[HOME PAGE (先頭5000)]:\n%s", page_html[:5000])
+        log.info("[sections (%d件)]:", len(sections_info))
+        for s in sections_info[:20]:
+            log.info("  cls=%s  text=%s", s.get("cls","")[:50], s.get("text","")[:80])
 
     except Exception as exc:
         import traceback
