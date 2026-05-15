@@ -85,11 +85,18 @@ def scrape_account_balances(driver) -> list[dict]:
 
     accounts = []
     try:
-        # /home ページから口座残高を取得
-        driver.get("https://zaim.net/home")
+        from selenium.webdriver.support import expected_conditions as EC
+
         wait = WebDriverWait(driver, 20)
+
+        # money ページを経由することでセッション状態を確立してから home へ
+        driver.get("https://zaim.net/money")
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(5)
+        time.sleep(4)
+
+        driver.get("https://zaim.net/home")
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(8)  # 非同期コンテンツのロードを待つ
 
         log.info("[HOME] URL=%s  title=%s", driver.current_url, driver.title)
 
@@ -99,17 +106,22 @@ def scrape_account_balances(driver) -> list[dict]:
                 return JSON.stringify(window.assets);
             return null;
         """)
-        if assets_json:
-            log.info("[window.assets] %s", assets_json)
+        log.info("[window.assets] %s", assets_json)
 
-        # .home-balance セクションのHTML全文をダンプして構造を把握
+        # .home-balance セクションのHTML全文をダンプ
         section_html = driver.execute_script("""
             var sec = document.querySelector('.home-balance') ||
-                      document.querySelector('[class*="home-balance"]') ||
-                      document.querySelector('section.box');
-            return sec ? sec.outerHTML.substring(0, 8000) : 'NOT_FOUND';
+                      document.querySelector('[class*="home-balance"]');
+            if(!sec){
+                // すべての section.box を探す
+                var boxes = document.querySelectorAll('section.box');
+                var r = [];
+                boxes.forEach(function(b){ r.push(b.outerHTML.substring(0,500)); });
+                return 'BOXES:' + JSON.stringify(r);
+            }
+            return sec.outerHTML.substring(0, 8000);
         """)
-        log.info("[home-balance HTML]\n%s", section_html)
+        log.info("[home-balance HTML (len=%d)]:\n%s", len(section_html or ""), (section_html or "")[:5000])
 
         # edit_balance リンク付き口座行を抽出
         rows = driver.execute_script("""
@@ -118,7 +130,6 @@ def scrape_account_balances(driver) -> list[dict]:
                 var container = a.closest('li') || a.closest('div.row') || a.parentElement;
                 var img = container.querySelector('img');
                 var name = img ? img.getAttribute('alt') : a.textContent.trim();
-                // 残高テキストを探す（数字を含む最初のテキストノード）
                 var balText = '';
                 container.querySelectorAll('*').forEach(function(el) {
                     if(el.children.length===0 && !balText) {
@@ -127,14 +138,18 @@ def scrape_account_balances(driver) -> list[dict]:
                     }
                 });
                 res.push({name: name, balance: balText,
-                          html: container.outerHTML.substring(0, 300)});
+                          html: container.outerHTML.substring(0, 400)});
             });
             return res;
         """)
         log.info("[edit_balance 行 %d件]:", len(rows))
         for r in rows[:15]:
-            log.info("  name=%s  balance=%s", r.get("name", "")[:50], r.get("balance", ""))
-            log.info("  html=%s", r.get("html", "")[:200])
+            log.info("  name=%s  balance=%s", r.get("name", "")[:60], r.get("balance", ""))
+            log.info("  html=%s", r.get("html", "")[:300])
+
+        # ページ先頭5000文字もダンプして構造把握
+        page_html = driver.page_source
+        log.info("[HOME PAGE (先頭5000)]:\n%s", page_html[:5000])
 
     except Exception as exc:
         import traceback
