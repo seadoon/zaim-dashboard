@@ -88,64 +88,25 @@ def scrape_account_balances(driver) -> list[dict]:
         "https://zaim.net/accounts",
     ]
 
-    candidate_selectors = [
-        "table tbody tr",
-        "[class*='account'] li",
-        "[class*='Account'] li",
-        "li[class*='item']",
-        "[data-testid*='account']",
-        "ul li",
-    ]
-
     accounts = []
     try:
-        rows = []
         for url in candidate_urls:
             driver.get(url)
             wait = WebDriverWait(driver, 15)
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            time.sleep(3)
+            time.sleep(4)
 
             title = driver.title
             log.info("試行 URL: %s  タイトル: %s", driver.current_url, title)
 
-            # 404 ページはスキップ
             if "見つかりません" in title or "not found" in title.lower():
-                log.warning("404ページのためスキップ: %s", url)
+                log.warning("404のためスキップ: %s", url)
                 continue
 
-            for sel in candidate_selectors:
-                rows = driver.find_elements(By.CSS_SELECTOR, sel)
-                if rows:
-                    log.info("セレクター '%s' で %d 件の行を発見 (URL: %s)", sel, len(rows), url)
-                    break
-
-            if rows:
-                break
-
-        if not rows:
-            log.warning("全URLで口座行が見つかりませんでした")
-            log.info("最後のページソース (先頭3000文字):\n%s", driver.page_source[:3000])
-            return accounts
-
-        for row in rows:
-            text = row.text.strip()
-            if not text:
-                continue
-            # 金額 (例: "1,234,567" または "-123,456") を抽出
-            amounts = re.findall(r'-?[\d,]+', text)
-            if not amounts:
-                continue
-            lines = [l.strip() for l in text.splitlines() if l.strip()]
-            if not lines:
-                continue
-            name = lines[0]
-            try:
-                balance = int(amounts[0].replace(',', ''))
-            except ValueError:
-                continue
-            accounts.append({"account_name": name, "balance": balance})
-            log.info("口座: %s = %d 円", name, balance)
+            # ページ構造をダンプして正しいセレクターを特定する
+            html = driver.page_source
+            log.info("ページソース (先頭8000文字):\n%s", html[:8000])
+            break  # 最初の有効なページだけ調査
 
     except Exception as exc:
         log.error("口座残高スクレイピング失敗: %s", exc)
