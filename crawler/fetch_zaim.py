@@ -109,42 +109,45 @@ def scrape_account_balances(driver) -> list[dict]:
         log.info("[window.assets] %s", assets_json)
 
         # .home-balance セクション内のテキストノードを全部取る
-        leaf_texts = driver.execute_script("""
-            var sec = document.querySelector('.home-balance') ||
-                      document.querySelector('[class*="home-balance"]');
-            if(!sec) return {found: false, texts: [], altTexts: []};
-            var texts = [];
-            sec.querySelectorAll('*').forEach(function(el){
-                if(el.children.length===0){
-                    var t = el.textContent.trim();
-                    if(t.length>0 && t.length<80)
-                        var cls = typeof el.className==='string'?el.className:(el.className.baseVal||'');
-                        texts.push({tag:el.tagName, cls:cls.substring(0,50), text:t});
-                }
-            });
-            var altTexts = [];
-            sec.querySelectorAll('img[alt]').forEach(function(img){
-                altTexts.push(img.getAttribute('alt'));
-            });
-            return {found: true, texts: texts.slice(0,100), altTexts: altTexts.slice(0,30)};
-        """)
+        leaf_texts = driver.execute_script(
+            "var sec = document.querySelector('.home-balance') ||"
+            " document.querySelector('[class*=\"home-balance\"]');"
+            " if(!sec) return {found:false,texts:[],altTexts:[]};"
+            " var texts=[];"
+            " sec.querySelectorAll('*').forEach(function(el){"
+            "   if(el.children.length===0){"
+            "     var t=(el.textContent||'').trim();"
+            "     if(t.length>0 && t.length<80){"
+            "       var cls=el.getAttribute?el.getAttribute('class')||'':'';"
+            "       texts.push({tag:el.tagName,cls:cls.substring(0,50),text:t});"
+            "     }"
+            "   }"
+            " });"
+            " var altTexts=[];"
+            " sec.querySelectorAll('img[alt]').forEach(function(img){"
+            "   altTexts.push(img.getAttribute('alt'));"
+            " });"
+            " return {found:true,texts:texts.slice(0,100),altTexts:altTexts.slice(0,30)};"
+        )
         log.info("[home-balance found=%s, imgs=%d, texts=%d]",
-                 leaf_texts.get("found"), len(leaf_texts.get("altTexts",[])), len(leaf_texts.get("texts",[])))
-        for t in leaf_texts.get("texts", [])[:50]:
+                 leaf_texts.get("found"), len(leaf_texts.get("altTexts", [])), len(leaf_texts.get("texts", [])))
+        for t in leaf_texts.get("texts", [])[:60]:
             log.info("  %s", json.dumps(t, ensure_ascii=False))
-        log.info("[img alt texts]: %s", json.dumps(leaf_texts.get("altTexts",[]), ensure_ascii=False))
+        log.info("[img alt texts]: %s", json.dumps(leaf_texts.get("altTexts", []), ensure_ascii=False))
 
-        # すべての section.box のクラスと先頭テキストを一覧表示
-        sections_info = driver.execute_script("""
-            var res = [];
-            document.querySelectorAll('section').forEach(function(s){
-                res.push({cls: s.className, text: s.textContent.trim().substring(0,100)});
-            });
-            return res;
-        """)
+        # すべての section のクラスと先頭テキストを一覧表示
+        sections_info = driver.execute_script(
+            "var res=[];"
+            " document.querySelectorAll('section').forEach(function(s){"
+            "   var cls=s.getAttribute('class')||'';"
+            "   var txt=(s.textContent||'').trim().substring(0,100);"
+            "   res.push({cls:cls,text:txt});"
+            " });"
+            " return res;"
+        )
         log.info("[sections (%d件)]:", len(sections_info))
         for s in sections_info[:20]:
-            log.info("  cls=%s  text=%s", s.get("cls","")[:50], s.get("text","")[:80])
+            log.info("  cls=%s  text=%s", s.get("cls", "")[:50], s.get("text", "")[:80])
 
     except Exception as exc:
         import traceback
