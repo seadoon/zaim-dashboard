@@ -75,79 +75,99 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def scrape_account_balances(driver) -> list[dict]:
-    """Zaim の口座一覧ページから口座名と残高を取得する。"""
-    import re
+    """Zaim の /home ページから口座残高を取得する。
+
+    1. window.assets でカテゴリ別合計（銀行・電子マネー・ポイント）を取得
+    2. .home-balance セクションの div.name / div.value ペアで個別口座を取得
+    銀行口座のみ個別保存し、その他カテゴリは window.assets の合計を使う。
+    """
     import json
-    import requests as req
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
 
     accounts = []
     try:
-        from selenium.webdriver.support import expected_conditions as EC
-
         wait = WebDriverWait(driver, 20)
 
-        # money ページを経由することでセッション状態を確立してから home へ
+        # money ページ経由でセッションを確立してから home へ
         driver.get("https://zaim.net/money")
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(4)
+        time.sleep(3)
 
         driver.get("https://zaim.net/home")
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        time.sleep(8)  # 非同期コンテンツのロードを待つ
+        time.sleep(7)
 
-        log.info("[HOME] URL=%s  title=%s", driver.current_url, driver.title)
-
-        # window.assets でカテゴリ別残高を確認
-        assets_json = driver.execute_script("""
-            if(typeof window.assets !== 'undefined')
-                return JSON.stringify(window.assets);
-            return null;
-        """)
-        log.info("[window.assets] %s", assets_json)
-
-        # .home-balance セクション内のテキストノードを全部取る
-        leaf_texts = driver.execute_script(
-            "var sec = document.querySelector('.home-balance') ||"
-            " document.querySelector('[class*=\"home-balance\"]');"
-            " if(!sec) return {found:false,texts:[],altTexts:[]};"
-            " var texts=[];"
-            " sec.querySelectorAll('*').forEach(function(el){"
-            "   if(el.children.length===0){"
-            "     var t=(el.textContent||'').trim();"
-            "     if(t.length>0 && t.length<80){"
-            "       var cls=el.getAttribute?el.getAttribute('class')||'':'';"
-            "       texts.push({tag:el.tagName,cls:cls.substring(0,50),text:t});"
-            "     }"
-            "   }"
-            " });"
-            " var altTexts=[];"
-            " sec.querySelectorAll('img[alt]').forEach(function(img){"
-            "   altTexts.push(img.getAttribute('alt'));"
-            " });"
-            " return {found:true,texts:texts.slice(0,100),altTexts:altTexts.slice(0,30)};"
+        # window.assets: [{name, amount, y}, ...] — カテゴリ別残高
+        assets_raw = driver.execute_script(
+            "return typeof window.assets!=='undefined' ? JSON.stringify(window.assets) : null;"
         )
-        log.info("[home-balance found=%s, imgs=%d, texts=%d]",
-                 leaf_texts.get("found"), len(leaf_texts.get("altTexts", [])), len(leaf_texts.get("texts", [])))
-        for t in leaf_texts.get("texts", [])[:60]:
-            log.info("  %s", json.dumps(t, ensure_ascii=False))
-        log.info("[img alt texts]: %s", json.dumps(leaf_texts.get("altTexts", []), ensure_ascii=False))
+        if not assets_raw:
+            log.warning("window.assets が未定義 — ログイン済みか確認してください")
+            return accounts
 
-        # すべての section のクラスと先頭テキストを一覧表示
-        sections_info = driver.execute_script(
-            "var res=[];"
-            " document.querySelectorAll('section').forEach(function(s){"
-            "   var cls=s.getAttribute('class')||'';"
-            "   var txt=(s.textContent||'').trim().substring(0,100);"
-            "   res.push({cls:cls,text:txt});"
+        asset_categories = json.loads(assets_raw)
+        log.info("window.assets: %s", assets_raw)
+
+        # .home-balance から個別口座の name/value ペアを抽出
+        pairs = driver.execute_script(
+            "var sec=document.querySelector('.home-balance')||"
+            " document.querySelector('[class*=\"home-balance\"]');"
+            " if(!sec) return [];"
+            " var res=[];"
+            " var els=sec.querySelectorAll('div.name,div[class*=\"value\"]');"
+            " var cur=null;"
+            " els.forEach(function(el){"
+            "   var cls=el.getAttribute('class')||'';"
+            "   if(cls==='name'){"
+            "     cur=(el.textContent||'').trim();"
+            "   } else if(cls.indexOf('value')===0 && cur){"
+            "     var t=(el.textContent||'').trim();"
+            "     res.push({name:cur,text:t,cls:cls});"
+            "     cur=null;"
+            "   }"
             " });"
             " return res;"
         )
-        log.info("[sections (%d件)]:", len(sections_info))
-        for s in sections_info[:20]:
-            log.info("  cls=%s  text=%s", s.get("cls", "")[:50], s.get("text", "")[:80])
+        log.info("口座行数: %d", len(pairs))
+
+        # yen テキスト ("¥1,234" や "¥-567") を整数に変換
+        def parse_yen(text: str) -> int | None:
+            if not text or text == "-":
+                return None
+            cleaned = text.replace("¥", "").replace(",", "").replace(" ", "")
+            try:
+                return int(cleaned)
+            except ValueError:
+                return None
+
+        # 銀行口座 (value plus = 正の残高) のみ個別保存
+        bank_accounts: list[dict] = []
+        for p in pairs:
+            if "plus" in p.get("cls", ""):
+                amount = parse_yen(p["text"])
+                if amount is not None and amount > 0:
+                    bank_accounts.append({"account_name": p["name"], "balance": amount})
+                    log.info("  銀行: %s → %d", p["name"], amount)
+
+        # window.assets の 銀行 合計と突合確認
+        asset_bank_total = next(
+            (int(a.get("amount", 0)) for a in asset_categories if a.get("name") == "銀行"), 0
+        )
+        scraped_bank_total = sum(a["balance"] for a in bank_accounts)
+        log.info("assets.銀行合計=%d  スクレイプ合計=%d", asset_bank_total, scraped_bank_total)
+
+        if bank_accounts:
+            accounts = bank_accounts
+        else:
+            # 個別取得失敗時は window.assets のカテゴリ別合計でフォールバック
+            log.warning("個別口座取得失敗 — window.assets でフォールバック")
+            for cat in asset_categories:
+                name = cat.get("name", "")
+                amount = int(cat.get("amount", 0))
+                if amount > 0:
+                    accounts.append({"account_name": name, "balance": amount})
 
     except Exception as exc:
         import traceback
