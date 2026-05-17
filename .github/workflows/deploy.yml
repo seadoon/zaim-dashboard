@@ -24,6 +24,8 @@ jobs:
         env:
           DB_PATH: ${{ github.workspace }}/data/zaim.db
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          NEXT_PUBLIC_GITHUB_ORG: seadoon
+          NEXT_PUBLIC_GITHUB_REPO: zaim-dashboard
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:
