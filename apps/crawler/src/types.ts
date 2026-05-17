@@ -13,8 +13,8 @@ export interface NotificationData {
   zaimBankTotal: number;
   mfSecuritiesTotal: number;
   zaimBankItems: Array<{ name: string; balance: number }>;
-  mfSecuritiesItems: Array<{ name: string; balance: number }>;
-  dailyChange: number | null;
+  mfAssetBreakdown: Array<{ category: string; amount: number }>;
+  mfDailyChange: number | null;
   monthlyChange: string;
   monthlyChangePercent: string;
   updatedAt: string;

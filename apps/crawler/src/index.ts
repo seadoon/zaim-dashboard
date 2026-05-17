@@ -4,9 +4,9 @@ import {
   getZaimBankTotal,
   getZaimBankItems,
   getMfSecuritiesTotal,
-  getMfSecuritiesItems,
-  getMfSecuritiesDailyChange,
   getMfSecuritiesAccountIssues,
+  getAssetBreakdownByCategory,
+  getDailyAssetChange,
 } from "@moneyforward-daily-action/db";
 import {
   buildAccountIdMap,
@@ -99,8 +99,8 @@ async function main() {
         const zaimBankTotal = getZaimBankTotal(db);
         const zaimBankItems = getZaimBankItems(db);
         const mfSecuritiesTotal = getMfSecuritiesTotal(db);
-        const mfSecuritiesItems = getMfSecuritiesItems(db);
-        const dailyChange = getMfSecuritiesDailyChange(db);
+        const mfAssetBreakdown = getAssetBreakdownByCategory(undefined, db);
+        const dailyAssetChange = getDailyAssetChange(undefined, db);
         const securitiesIssues = getMfSecuritiesAccountIssues(db).map((a) => ({
           name: a.name,
           status: a.status as "updating" | "error",
@@ -115,8 +115,8 @@ async function main() {
           zaimBankTotal,
           mfSecuritiesTotal,
           zaimBankItems,
-          mfSecuritiesItems,
-          dailyChange,
+          mfAssetBreakdown,
+          mfDailyChange: dailyAssetChange?.change ?? null,
           monthlyChange: notifyGroupData.summary.monthlyChange,
           monthlyChangePercent: notifyGroupData.summary.monthlyChangePercent,
           updatedAt,

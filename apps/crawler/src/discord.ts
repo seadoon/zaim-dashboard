@@ -106,17 +106,14 @@ function buildSummaryContent(data: NotificationData): string {
     zaimBankTotal,
     mfSecuritiesTotal,
     zaimBankItems,
-    mfSecuritiesItems,
-    dailyChange,
+    mfAssetBreakdown,
+    mfDailyChange,
     monthlyChange,
     monthlyChangePercent,
     updatedAt,
   } = data;
 
-  const dailyChangeText =
-    dailyChange !== null && dailyChange !== undefined
-      ? formatDailyChange(dailyChange)
-      : "-";
+  const dailyChangeText = mfDailyChange !== null ? formatDailyChange(mfDailyChange) : "-";
 
   const lines: string[] = [
     "**💰 資産更新レポート**",
@@ -124,30 +121,29 @@ function buildSummaryContent(data: NotificationData): string {
     "**総資産**",
     formatAmount(combinedTotal),
     "",
-    `**前日比（証券）** ${dailyChangeText}`,
+    `**前日比** ${dailyChangeText}`,
     `**今月比** ${monthlyChange} (${monthlyChangePercent})`,
-    "",
-    SECTION_DIVIDER,
-    "",
-    `**銀行・カード（Zaim）** ${formatAmount(zaimBankTotal)}`,
   ];
 
-  for (const item of zaimBankItems) {
-    lines.push(`• ${item.name}: ${formatAmount(item.balance)}`);
+  if (mfAssetBreakdown.length > 0) {
+    lines.push("", SECTION_DIVIDER, "", "**資産内訳（MoneyForward）**");
+    for (const item of mfAssetBreakdown) {
+      lines.push(`${item.category}: **${formatAmount(item.amount)}**`);
+    }
   }
 
-  if (zaimBankItems.length === 0) {
+  lines.push("", SECTION_DIVIDER, "", `**銀行・現金（Zaim）** ${formatAmount(zaimBankTotal)}`);
+
+  if (zaimBankItems.length > 0) {
+    for (const item of zaimBankItems) {
+      lines.push(`• ${item.name}: ${formatAmount(item.balance)}`);
+    }
+  } else {
     lines.push("• データなし（Zaimクローラー未実行）");
   }
 
-  lines.push("", `**証券（MoneyForward）** ${formatAmount(mfSecuritiesTotal)}`);
-
-  for (const item of mfSecuritiesItems) {
-    lines.push(`• ${item.name}: ${formatAmount(item.balance)}`);
-  }
-
-  if (mfSecuritiesItems.length === 0) {
-    lines.push("• データなし");
+  if (mfSecuritiesTotal > 0 && mfAssetBreakdown.length === 0) {
+    lines.push("", `**証券（MoneyForward）** ${formatAmount(mfSecuritiesTotal)}`);
   }
 
   if (data.accountIssues && data.accountIssues.length > 0) {
