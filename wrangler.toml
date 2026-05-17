@@ -1,4 +1,4 @@
-name = "mf-dashboard"
+name = "zaim-dashboard"
 compatibility_date = "2026-01-28"
 workers_dev = true
 preview_urls = false

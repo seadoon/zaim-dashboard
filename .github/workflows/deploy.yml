@@ -2,7 +2,7 @@ name: Deploy Dashboard to Cloudflare
 
 on:
   workflow_run:
-    workflows: ["Money Forward Daily Update"]
+    workflows: ["MoneyForward Daily Update"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
       - name: Build web app
         run: pnpm build --filter=@moneyforward-daily-action/web
         env:
-          DB_PATH: ${{ github.workspace }}/data/moneyforward.db
+          DB_PATH: ${{ github.workspace }}/data/zaim.db
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
