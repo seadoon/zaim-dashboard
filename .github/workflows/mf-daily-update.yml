@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: "mf-daily-update"
@@ -39,8 +39,19 @@ jobs:
         with:
           mode: restore
           enabled: ${{ vars.CACHE_AUTH_STATE }}
+
+      - name: Download DB from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          mkdir -p data
+          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
+            --endpoint-url https://46efd80dc4ef7479a2640b44866fc6b9.r2.cloudflarestorage.com \
+            || echo "No existing DB, starting fresh"
+
       - run: pnpm --filter @zaim-dashboard/crawler exec playwright install --with-deps chromium
-      - run: git fetch origin && git checkout origin/main -- data/zaim.db
       - run: pnpm --filter @zaim-dashboard/crawler start
         env:
           MF_EMAIL: ${{ secrets.MF_EMAIL }}
@@ -49,15 +60,18 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
           DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+
       - uses: ./.github/actions/auth-state-cache
         if: always()
         with:
           mode: save
           enabled: ${{ vars.CACHE_AUTH_STATE }}
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/zaim.db
-          git diff --cached --quiet || git commit -m "chore: update mf database"
-          git pull --rebase -X ours
-          git push
+
+      - name: Upload DB to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 cp data/zaim.db s3://${{ vars.R2_BUCKET_NAME }}/zaim.db \
+            --endpoint-url https://46efd80dc4ef7479a2640b44866fc6b9.r2.cloudflarestorage.com
