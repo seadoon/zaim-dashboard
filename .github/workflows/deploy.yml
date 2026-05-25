@@ -27,7 +27,7 @@ jobs:
         run: |
           mkdir -p data
           aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
-            --endpoint-url https://46efd80dc4ef7479a2640b44866fc6b9.r2.cloudflarestorage.com
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
       - uses: ./.github/actions/setup-node
       - name: Build web app
@@ -41,4 +41,4 @@ jobs:
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 46efd80dc4ef7479a2640b44866fc6b9
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
