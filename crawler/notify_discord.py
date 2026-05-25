@@ -5,6 +5,7 @@ import json
 import os
 import sqlite3
 import urllib.request
+import urllib.error
 from datetime import datetime, timezone, timedelta
 
 JST = timezone(timedelta(hours=9))
@@ -35,8 +36,14 @@ def send(webhook_url: str, content: str) -> None:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
-        print(f"Discord: {resp.status}")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            print(f"Discord: {resp.status}")
+    except urllib.error.HTTPError as e:
+        print(f"Discord webhook エラー: HTTP {e.code} {e.reason}")
+        if e.code == 403:
+            print("Webhook が無効か削除されている可能性があります。Discord サーバー設定で確認してください。")
+        raise
 
 
 def main() -> None:
@@ -78,7 +85,11 @@ def main() -> None:
     expense = row["expense"] or 0
     net = income - expense
 
-    # 前月比（先月同日までの支出）
+    # 前月同日比
+    if now_jst.month > 1:
+        prev_month = now_jst.replace(month=now_jst.month - 1)
+    else:
+        prev_month = now_jst.replace(year=now_jst.year - 1, month=12)
     prev_row = conn.execute(
         """
         SELECT SUM(amount) AS expense
@@ -88,10 +99,8 @@ def main() -> None:
           AND date <= ?
         """,
         (
-            (now_jst.replace(month=now_jst.month - 1) if now_jst.month > 1
-             else now_jst.replace(year=now_jst.year - 1, month=12)).strftime("%Y-%m%%"),
-            (now_jst.replace(month=now_jst.month - 1) if now_jst.month > 1
-             else now_jst.replace(year=now_jst.year - 1, month=12)).strftime("%Y-%m-") + now_jst.strftime("%d"),
+            prev_month.strftime("%Y-%m%%"),
+            prev_month.strftime(f"%Y-%m-{now_jst.strftime('%d')}"),
         ),
     ).fetchone()
     prev_expense = prev_row["expense"] or 0
