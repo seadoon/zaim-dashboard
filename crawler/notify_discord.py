@@ -4,8 +4,7 @@
 import json
 import os
 import sqlite3
-import urllib.request
-import urllib.error
+import subprocess
 from datetime import datetime, timezone, timedelta
 
 JST = timezone(timedelta(hours=9))
@@ -29,21 +28,18 @@ def fmt_signed(n: int) -> str:
 
 
 def send(webhook_url: str, content: str) -> None:
-    payload = json.dumps({"content": content}).encode()
-    req = urllib.request.Request(
-        webhook_url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    payload = json.dumps({"content": content})
+    result = subprocess.run(
+        ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+         "-X", "POST", webhook_url,
+         "-H", "Content-Type: application/json",
+         "-d", payload],
+        capture_output=True, text=True,
     )
-    try:
-        with urllib.request.urlopen(req) as resp:
-            print(f"Discord: {resp.status}")
-    except urllib.error.HTTPError as e:
-        print(f"Discord webhook エラー: HTTP {e.code} {e.reason}")
-        if e.code == 403:
-            print("Webhook が無効か削除されている可能性があります。Discord サーバー設定で確認してください。")
-        raise
+    code = result.stdout.strip()
+    print(f"Discord: {code}")
+    if code not in ("200", "204"):
+        raise RuntimeError(f"Discord webhook エラー: HTTP {code}")
 
 
 def main() -> None:
