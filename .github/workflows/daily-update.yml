@@ -68,6 +68,18 @@ jobs:
           FETCH_MONTHS: ${{ vars.FETCH_MONTHS || '3' }}
         run: python crawler/fetch_zaim.py
 
+      - name: Debug Discord webhook
+        if: success()
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          echo "URL length: ${#DISCORD_WEBHOOK_URL}"
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"GitHub Actions テスト"}')
+          echo "curl response code: $RESPONSE"
+
       - name: Notify Discord
         if: success()
         continue-on-error: true
