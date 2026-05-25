@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: "daily-update"
@@ -33,6 +33,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download DB from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          mkdir -p data
+          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
+            --endpoint-url https://46efd80dc4ef7479a2640b44866fc6b9.r2.cloudflarestorage.com \
+            || echo "No existing DB, starting fresh"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -57,11 +68,11 @@ jobs:
           FETCH_MONTHS: ${{ vars.FETCH_MONTHS || '3' }}
         run: python crawler/fetch_zaim.py
 
-      - name: Commit and push database
+      - name: Upload DB to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/zaim.db
-          git diff --cached --quiet || git commit -m "chore: update zaim database"
-          git pull --rebase
-          git push
+          aws s3 cp data/zaim.db s3://${{ vars.R2_BUCKET_NAME }}/zaim.db \
+            --endpoint-url https://46efd80dc4ef7479a2640b44866fc6b9.r2.cloudflarestorage.com
