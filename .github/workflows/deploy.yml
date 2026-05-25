@@ -17,7 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
+
+      - name: Download DB from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          mkdir -p data
+          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
+            --endpoint-url https://46efd80dc4ef7479a2640b44866fc6b9.r2.cloudflarestorage.com
+
       - uses: ./.github/actions/setup-node
       - name: Build web app
         run: pnpm build --filter=@moneyforward-daily-action/web
