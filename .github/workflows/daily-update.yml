@@ -68,6 +68,12 @@ jobs:
           FETCH_MONTHS: ${{ vars.FETCH_MONTHS || '3' }}
         run: python crawler/fetch_zaim.py
 
+      - name: Notify Discord
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python crawler/notify_discord.py
+
       - name: Upload DB to R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
