@@ -47,7 +47,7 @@ def send(webhook_url: str, content: str) -> None:
 
 
 def main() -> None:
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    webhook_url = (os.environ.get("DISCORD_WEBHOOK_URL") or "").strip()
     if not webhook_url:
         print("DISCORD_WEBHOOK_URL が未設定のためスキップ")
         return
