@@ -11,6 +11,7 @@ out/
 
 debug/
 
+data/*.db
 test-zaim.db*
 *.db-shm
 *.db-wal
