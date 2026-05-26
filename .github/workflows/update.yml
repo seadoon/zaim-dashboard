@@ -1,0 +1,164 @@
+name: Daily Update
+
+on:
+  schedule:
+    # JST 7:00 → UTC 22:00 (前日)
+    - cron: "0 22 * * *"
+    # JST 12:00 → UTC 3:00
+    - cron: "0 3 * * *"
+    # JST 15:30 → UTC 6:30
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "daily-update"
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - id: check
+        env:
+          ZAIM_ID: ${{ secrets.ZAIM_ID }}
+          MF_EMAIL: ${{ secrets.MF_EMAIL }}
+          RUN_TASK: ${{ vars.RUN_TASK }}
+        run: echo "should-run=${{ env.ZAIM_ID != '' && env.MF_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
+
+  zaim:
+    needs: check
+    if: needs.check.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download DB from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          mkdir -p data
+          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            || echo "No existing DB, starting fresh"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: crawler/requirements.txt
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            google-chrome-stable \
+            || (wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt-get install -y /tmp/chrome.deb)
+
+      - name: Install Python dependencies
+        run: pip install -r crawler/requirements.txt
+
+      - name: Fetch Zaim data
+        env:
+          ZAIM_ID: ${{ secrets.ZAIM_ID }}
+          ZAIM_PASSWORD: ${{ secrets.ZAIM_PASSWORD }}
+          FETCH_MONTHS: ${{ vars.FETCH_MONTHS || '3' }}
+        run: python crawler/fetch_zaim.py
+
+      - name: Upload DB to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 cp data/zaim.db s3://${{ vars.R2_BUCKET_NAME }}/zaim.db \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+  mf:
+    needs: [check, zaim]
+    if: needs.check.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/auth-state-cache
+        with:
+          mode: restore
+          enabled: ${{ vars.CACHE_AUTH_STATE }}
+
+      - name: Download DB from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          mkdir -p data
+          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            || echo "No existing DB, starting fresh"
+
+      - run: pnpm --filter @zaim-dashboard/crawler exec playwright install --with-deps chromium
+      - run: pnpm --filter @zaim-dashboard/crawler start
+        env:
+          MF_EMAIL: ${{ secrets.MF_EMAIL }}
+          MF_PASSWORD: ${{ secrets.MF_PASSWORD }}
+          MF_TOTP_SECRET: ${{ secrets.MF_TOTP_SECRET }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+
+      - uses: ./.github/actions/auth-state-cache
+        if: always()
+        with:
+          mode: save
+          enabled: ${{ vars.CACHE_AUTH_STATE }}
+
+      - name: Upload DB to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 cp data/zaim.db s3://${{ vars.R2_BUCKET_NAME }}/zaim.db \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+  deploy:
+    needs: mf
+    if: needs.mf.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download DB from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          mkdir -p data
+          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
+            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+      - uses: ./.github/actions/setup-node
+      - name: Build web app
+        run: pnpm build --filter=@moneyforward-daily-action/web
+        env:
+          DB_PATH: ${{ github.workspace }}/data/zaim.db
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          NEXT_PUBLIC_GITHUB_ORG: seadoon
+          NEXT_PUBLIC_GITHUB_REPO: zaim-dashboard
+      - name: Deploy to Cloudflare Workers
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
