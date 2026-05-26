@@ -95,74 +95,42 @@ function formatAmount(n: number): string {
   return `¥${n.toLocaleString("ja-JP")}`;
 }
 
-function formatDailyChange(n: number): string {
+function formatChange(n: number): string {
   const sign = n >= 0 ? "+" : "";
   return `${sign}¥${n.toLocaleString("ja-JP")}`;
 }
 
 function buildSummaryContent(data: NotificationData): string {
-  const {
-    combinedTotal,
-    zaimBankTotal,
-    mfSecuritiesTotal,
-    zaimBankItems,
-    mfAssetBreakdown,
-    mfDailyChange,
-    monthlyChange,
-    monthlyChangePercent,
-    updatedAt,
-  } = data;
+  const { totalAssets, zaimBankTotal, mfSecuritiesTotal, dailyChange, updatedAt } = data;
 
-  const dailyChangeText = mfDailyChange !== null ? formatDailyChange(mfDailyChange) : "-";
+  const dailyChangeText = dailyChange !== null ? formatChange(dailyChange) : "-";
 
   const lines: string[] = [
-    "**💰 資産更新レポート**",
+    "**💰 資産サマリー**",
     "",
-    "**総資産**",
-    formatAmount(combinedTotal),
-    "",
+    `**総資産** ${formatAmount(totalAssets)}`,
     `**前日比** ${dailyChangeText}`,
-    `**今月比** ${monthlyChange} (${monthlyChangePercent})`,
+    "",
+    SECTION_DIVIDER,
+    "",
+    "**内訳**",
+    `銀行・現金（Zaim）: ${formatAmount(zaimBankTotal)}`,
+    `証券（MoneyForward）: ${formatAmount(mfSecuritiesTotal)}`,
   ];
-
-  if (mfAssetBreakdown.length > 0) {
-    lines.push("", SECTION_DIVIDER, "", "**資産内訳（MoneyForward）**");
-    for (const item of mfAssetBreakdown) {
-      lines.push(`${item.category}: **${formatAmount(item.amount)}**`);
-    }
-  }
-
-  lines.push("", SECTION_DIVIDER, "", `**銀行・現金（Zaim）** ${formatAmount(zaimBankTotal)}`);
-
-  if (zaimBankItems.length > 0) {
-    for (const item of zaimBankItems) {
-      lines.push(`• ${item.name}: ${formatAmount(item.balance)}`);
-    }
-  } else {
-    lines.push("• データなし（Zaimクローラー未実行）");
-  }
-
-  if (mfSecuritiesTotal > 0 && mfAssetBreakdown.length === 0) {
-    lines.push("", `**証券（MoneyForward）** ${formatAmount(mfSecuritiesTotal)}`);
-  }
 
   if (data.accountIssues && data.accountIssues.length > 0) {
     lines.push("", SECTION_DIVIDER, "", "**証券アカウント状態**");
     for (const issue of data.accountIssues) {
       const statusLabel = issue.status === "updating" ? "更新中" : "エラー";
-      if (issue.errorMessage) {
-        lines.push(`• ${issue.name} (${statusLabel}: ${issue.errorMessage})`);
-      } else {
-        lines.push(`• ${issue.name} (${statusLabel})`);
-      }
+      const detail = issue.errorMessage ? ` (${issue.errorMessage})` : "";
+      lines.push(`• ${issue.name} (${statusLabel}${detail})`);
     }
   }
 
   const dashboardUrl = process.env.DASHBOARD_URL;
+  lines.push("", SECTION_DIVIDER, "", `更新日時: ${updatedAt}`);
   if (dashboardUrl) {
-    lines.push("", SECTION_DIVIDER, "", `更新日時: ${updatedAt}`, `ダッシュボード: ${dashboardUrl}`);
-  } else {
-    lines.push("", SECTION_DIVIDER, "", `更新日時: ${updatedAt}`);
+    lines.push(`ダッシュボード: ${dashboardUrl}`);
   }
 
   return lines.join("\n");
@@ -170,7 +138,7 @@ function buildSummaryContent(data: NotificationData): string {
 
 function buildErrorContent(message: string, timestamp: string): string {
   return [
-    "**🚨 Money Forward スクレイピングエラー**",
+    "**🚨 MoneyForward スクレイピングエラー**",
     "",
     "```text",
     message || "Unknown error",

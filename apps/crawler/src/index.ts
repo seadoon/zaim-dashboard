@@ -2,10 +2,8 @@ import {
   initDb,
   closeDb,
   getZaimBankTotal,
-  getZaimBankItems,
   getMfSecuritiesTotal,
   getMfSecuritiesAccountIssues,
-  getAssetBreakdownByCategory,
   getDailyAssetChange,
 } from "@moneyforward-daily-action/db";
 import {
@@ -97,9 +95,7 @@ async function main() {
         warn("No data available for notification");
       } else {
         const zaimBankTotal = getZaimBankTotal(db);
-        const zaimBankItems = getZaimBankItems(db);
         const mfSecuritiesTotal = getMfSecuritiesTotal(db);
-        const mfAssetBreakdown = getAssetBreakdownByCategory(undefined, db);
         const dailyAssetChange = getDailyAssetChange(undefined, db);
         const securitiesIssues = getMfSecuritiesAccountIssues(db).map((a) => ({
           name: a.name,
@@ -111,14 +107,10 @@ async function main() {
         const updatedAt = now.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
         const notifyPayload = {
-          combinedTotal: zaimBankTotal + mfSecuritiesTotal,
+          totalAssets: zaimBankTotal + mfSecuritiesTotal,
           zaimBankTotal,
           mfSecuritiesTotal,
-          zaimBankItems,
-          mfAssetBreakdown,
-          mfDailyChange: dailyAssetChange?.change ?? null,
-          monthlyChange: notifyGroupData.summary.monthlyChange,
-          monthlyChangePercent: notifyGroupData.summary.monthlyChangePercent,
+          dailyChange: dailyAssetChange?.change ?? null,
           updatedAt,
           accountIssues: securitiesIssues,
         };

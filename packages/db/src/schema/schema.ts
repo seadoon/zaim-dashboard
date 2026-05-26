@@ -224,6 +224,22 @@ export const assetHistoryCategories = sqliteTable(
 );
 
 // ============================================================================
+// Zaim 銀行残高履歴
+// ============================================================================
+
+export const zaimDailyBankTotals = sqliteTable(
+  "zaim_daily_bank_totals",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    date: text("date").notNull().unique(),
+    total: integer("total").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [index("zaim_daily_bank_totals_date_idx").on(table.date)],
+);
+
+// ============================================================================
 // リレーション定義
 // ============================================================================
 

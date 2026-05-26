@@ -1,4 +1,4 @@
-import { sql, inArray } from "drizzle-orm";
+import { sql, inArray, desc, lte } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { getLatestSnapshot } from "./holding";
@@ -75,6 +75,29 @@ export function getMfSecuritiesDailyChange(db: Db = getDb()): number | null {
       AND hv.daily_change IS NOT NULL
   `);
   return result?.total ?? null;
+}
+
+export function getZaimDailyBankTotal(date?: string, db: Db = getDb()): number {
+  const targetDate = date ?? new Date().toISOString().slice(0, 10);
+  const row = db
+    .select({ total: schema.zaimDailyBankTotals.total })
+    .from(schema.zaimDailyBankTotals)
+    .where(lte(schema.zaimDailyBankTotals.date, targetDate))
+    .orderBy(desc(schema.zaimDailyBankTotals.date))
+    .limit(1)
+    .get();
+  return row?.total ?? 0;
+}
+
+export function getZaimBankHistory(
+  options?: { limit?: number },
+  db: Db = getDb(),
+): Array<{ date: string; total: number }> {
+  const query = db
+    .select({ date: schema.zaimDailyBankTotals.date, total: schema.zaimDailyBankTotals.total })
+    .from(schema.zaimDailyBankTotals)
+    .orderBy(desc(schema.zaimDailyBankTotals.date));
+  return options?.limit ? query.limit(options.limit).all() : query.all();
 }
 
 export function getMfSecuritiesAccountIssues(

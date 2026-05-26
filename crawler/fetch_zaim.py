@@ -70,6 +70,15 @@ def init_db(conn: sqlite3.Connection) -> None:
             balance      INTEGER NOT NULL,
             updated_at   TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS zaim_daily_bank_totals (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            date       TEXT NOT NULL UNIQUE,
+            total      INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS zaim_daily_bank_totals_date_idx ON zaim_daily_bank_totals (date);
     """)
     conn.commit()
 
@@ -177,15 +186,28 @@ def scrape_account_balances(driver) -> list[dict]:
 
 
 def upsert_account_balances(conn: sqlite3.Connection, accounts: list[dict]) -> int:
-    """zaim_account_balances テーブルを全件置き換え。"""
+    """zaim_account_balances テーブルを全件置き換え。日次合計も zaim_daily_bank_totals に記録。"""
     if not accounts:
         return 0
     now = datetime.now().isoformat()
+    today = date.today().isoformat()
+
     conn.execute("DELETE FROM zaim_account_balances")
     sql = "INSERT INTO zaim_account_balances (account_name, balance, updated_at) VALUES (?, ?, ?)"
     for a in accounts:
         conn.execute(sql, (a["account_name"], a["balance"], now))
+
+    total = sum(a["balance"] for a in accounts)
+    conn.execute(
+        """
+        INSERT INTO zaim_daily_bank_totals (date, total, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(date) DO UPDATE SET total = excluded.total, updated_at = excluded.updated_at
+        """,
+        (today, total, now, now),
+    )
     conn.commit()
+    log.info("zaim_daily_bank_totals: %s → %d", today, total)
     return len(accounts)
 
 

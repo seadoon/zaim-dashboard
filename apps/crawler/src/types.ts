@@ -9,14 +9,10 @@ export interface AccountIssue {
 }
 
 export interface NotificationData {
-  combinedTotal: number;
+  totalAssets: number;
   zaimBankTotal: number;
   mfSecuritiesTotal: number;
-  zaimBankItems: Array<{ name: string; balance: number }>;
-  mfAssetBreakdown: Array<{ category: string; amount: number }>;
-  mfDailyChange: number | null;
-  monthlyChange: string;
-  monthlyChangePercent: string;
+  dailyChange: number | null;
   updatedAt: string;
   accountIssues?: AccountIssue[];
 }

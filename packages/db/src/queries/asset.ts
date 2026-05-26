@@ -2,6 +2,7 @@ import { desc, eq, sql, and } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { resolveGroupId } from "../shared/group-filter";
 import { getHoldingsWithLatestValues } from "./holding";
+import { getZaimDailyBankTotal } from "./zaim";
 
 export function parseDateString(dateStr: string): { year: number; month: number; day: number } {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -54,10 +55,16 @@ export function getAssetBreakdownByCategory(groupIdParam?: string, db: Db = getD
     .where(eq(schema.assetHistoryCategories.assetHistoryId, latestHistory.id))
     .all();
 
-  return categories
+  const zaimBank = getZaimDailyBankTotal(latestHistory.date, db);
+  const result = categories
     .filter((c) => c.amount > 0)
-    .map((c) => ({ category: c.categoryName, amount: c.amount }))
-    .sort((a, b) => b.amount - a.amount);
+    .map((c) => ({ category: c.categoryName, amount: c.amount }));
+
+  if (zaimBank > 0) {
+    result.push({ category: "銀行・現金", amount: zaimBank });
+  }
+
+  return result.sort((a, b) => b.amount - a.amount);
 }
 
 export function aggregateLiabilitiesByCategory(
@@ -130,9 +137,14 @@ export function getAssetHistoryWithCategories(
       categories[cat.categoryName] = cat.amount;
     }
 
+    const zaimBank = getZaimDailyBankTotal(entry.date, db);
+    if (zaimBank > 0) {
+      categories["銀行・現金"] = zaimBank;
+    }
+
     return {
       date: entry.date,
-      totalAssets: entry.totalAssets,
+      totalAssets: entry.totalAssets + zaimBank,
       categories,
     };
   });
@@ -143,14 +155,16 @@ export function getLatestTotalAssets(groupIdParam?: string, db: Db = getDb()): n
   if (!groupId) return null;
 
   const latest = db
-    .select({ totalAssets: schema.assetHistory.totalAssets })
+    .select({ totalAssets: schema.assetHistory.totalAssets, date: schema.assetHistory.date })
     .from(schema.assetHistory)
     .where(eq(schema.assetHistory.groupId, groupId))
     .orderBy(desc(schema.assetHistory.date))
     .limit(1)
     .get();
 
-  return latest?.totalAssets ?? null;
+  if (!latest) return null;
+  const zaimBank = getZaimDailyBankTotal(latest.date, db);
+  return latest.totalAssets + zaimBank;
 }
 
 export function getDailyAssetChange(groupIdParam?: string, db: Db = getDb()) {
@@ -158,7 +172,7 @@ export function getDailyAssetChange(groupIdParam?: string, db: Db = getDb()) {
   if (!groupId) return null;
 
   const latest = db
-    .select()
+    .select({ totalAssets: schema.assetHistory.totalAssets, date: schema.assetHistory.date })
     .from(schema.assetHistory)
     .where(eq(schema.assetHistory.groupId, groupId))
     .orderBy(desc(schema.assetHistory.date))
@@ -169,11 +183,12 @@ export function getDailyAssetChange(groupIdParam?: string, db: Db = getDb()) {
     return null;
   }
 
-  return {
-    today: latest[0].totalAssets,
-    yesterday: latest[1].totalAssets,
-    change: latest[0].totalAssets - latest[1].totalAssets,
-  };
+  const todayZaim = getZaimDailyBankTotal(latest[0].date, db);
+  const yesterdayZaim = getZaimDailyBankTotal(latest[1].date, db);
+  const today = latest[0].totalAssets + todayZaim;
+  const yesterday = latest[1].totalAssets + yesterdayZaim;
+
+  return { today, yesterday, change: today - yesterday };
 }
 
 export function calculateCategoryChanges(
@@ -234,26 +249,39 @@ export function getCategoryChangesForPeriod(
     return null;
   }
 
-  const latestCategories = db
+  const latestCats = db
     .select()
     .from(schema.assetHistoryCategories)
     .where(eq(schema.assetHistoryCategories.assetHistoryId, latest.id))
     .all();
-
-  const previousCategories = db
+  const previousCats = db
     .select()
     .from(schema.assetHistoryCategories)
     .where(eq(schema.assetHistoryCategories.assetHistoryId, previous.id))
     .all();
 
+  const latestZaim = getZaimDailyBankTotal(latest.date, db);
+  const previousZaim = getZaimDailyBankTotal(previous.date, db);
+
+  const latestCategories = [
+    ...latestCats,
+    ...(latestZaim > 0 ? [{ categoryName: "銀行・現金", amount: latestZaim }] : []),
+  ];
+  const previousCategories = [
+    ...previousCats,
+    ...(previousZaim > 0 ? [{ categoryName: "銀行・現金", amount: previousZaim }] : []),
+  ];
+
   const categoryChanges = calculateCategoryChanges(latestCategories, previousCategories);
+  const currentTotal = latest.totalAssets + latestZaim;
+  const previousTotal = previous.totalAssets + previousZaim;
 
   return {
     categories: categoryChanges,
     total: {
-      current: latest.totalAssets,
-      previous: previous.totalAssets,
-      change: latest.totalAssets - previous.totalAssets,
+      current: currentTotal,
+      previous: previousTotal,
+      change: currentTotal - previousTotal,
     },
   };
 }
