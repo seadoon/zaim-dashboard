@@ -81,6 +81,12 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS zaim_daily_bank_totals_date_idx ON zaim_daily_bank_totals (date);
     """)
     conn.commit()
+    # count カラムが存在しない古いDBに追加
+    try:
+        conn.execute("ALTER TABLE transactions ADD COLUMN count TEXT NOT NULL DEFAULT '集計に含む'")
+        conn.commit()
+    except Exception:
+        pass
 
 
 def scrape_account_balances(driver) -> list[dict]:
@@ -216,8 +222,8 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
     sql = """
         INSERT INTO transactions
             (zaim_id, date, type, category, genre, amount,
-             place, name, comment, from_account, to_account, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             place, name, comment, from_account, to_account, count, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(zaim_id) DO UPDATE SET
             date         = excluded.date,
             type         = excluded.type,
@@ -229,6 +235,7 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
             comment      = excluded.comment,
             from_account = excluded.from_account,
             to_account   = excluded.to_account,
+            count        = excluded.count,
             updated_at   = excluded.updated_at
     """
     count = 0
@@ -248,6 +255,7 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
         from_account = account if tx_type in ("payment", "transfer") else None
         to_account = account if tx_type == "income" else None
 
+        count = r.get("count") or "集計に含む"
         conn.execute(sql, (
             r["id"],
             record_date,
@@ -260,6 +268,7 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
             r.get("comment") or None,
             from_account,
             to_account,
+            count,
             now,
             now,
         ))

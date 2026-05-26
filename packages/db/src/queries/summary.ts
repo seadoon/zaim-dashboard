@@ -1,6 +1,8 @@
-import { desc, like, sql } from "drizzle-orm";
+import { desc, like, ne, sql } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { generateMonthRange } from "../shared/utils";
+
+const EXCLUDED_FROM_COUNT = "集計に含まない";
 
 export function getMonthlySummaries(options?: { limit?: number }, db: Db = getDb()) {
   const oldestResult = db
@@ -23,6 +25,7 @@ export function getMonthlySummaries(options?: { limit?: number }, db: Db = getDb
       totalExpense: sql<number>`sum(case when ${schema.transactions.type} = 'payment' then ${schema.transactions.amount} else 0 end)`.as("total_expense"),
     })
     .from(schema.transactions)
+    .where(ne(schema.transactions.count, EXCLUDED_FROM_COUNT))
     .groupBy(sql`substr(${schema.transactions.date}, 1, 7)`)
     .orderBy(desc(sql`substr(${schema.transactions.date}, 1, 7)`))
     .all();
@@ -51,7 +54,7 @@ export function getMonthlySummaryByMonth(month: string, db: Db = getDb()) {
       totalExpense: sql<number>`sum(case when ${schema.transactions.type} = 'payment' then ${schema.transactions.amount} else 0 end)`.as("total_expense"),
     })
     .from(schema.transactions)
-    .where(like(schema.transactions.date, `${month}%`))
+    .where(sql`${schema.transactions.date} LIKE ${`${month}%`} AND ${schema.transactions.count} != ${EXCLUDED_FROM_COUNT}`)
     .get();
 
   if (!r) return undefined;
@@ -70,7 +73,7 @@ export function getMonthlyCategoryTotals(month: string, db: Db = getDb()) {
     })
     .from(schema.transactions)
     .where(
-      sql`substr(${schema.transactions.date}, 1, 7) = ${month} AND ${schema.transactions.type} != 'transfer'`,
+      sql`substr(${schema.transactions.date}, 1, 7) = ${month} AND ${schema.transactions.type} != 'transfer' AND ${schema.transactions.count} != ${EXCLUDED_FROM_COUNT}`,
     )
     .groupBy(schema.transactions.category, schema.transactions.genre, schema.transactions.type)
     .orderBy(desc(sql<number>`sum(${schema.transactions.amount})`))
@@ -108,7 +111,7 @@ export function getYearToDateSummary(options?: { year?: number }, db: Db = getDb
       monthCount: sql<number>`count(distinct substr(${schema.transactions.date}, 1, 7))`.as("month_count"),
     })
     .from(schema.transactions)
-    .where(like(schema.transactions.date, `${targetYear}-%`))
+    .where(sql`${schema.transactions.date} LIKE ${`${targetYear}-%`} AND ${schema.transactions.count} != ${EXCLUDED_FROM_COUNT}`)
     .get();
 
   const totalIncome = r?.totalIncome ?? 0;
@@ -129,7 +132,7 @@ export function getDailyTotals(month: string, db: Db = getDb()) {
       totalExpense: sql<number>`sum(case when ${schema.transactions.type} = 'payment' then ${schema.transactions.amount} else 0 end)`.as("total_expense"),
     })
     .from(schema.transactions)
-    .where(like(schema.transactions.date, `${month}%`))
+    .where(sql`${schema.transactions.date} LIKE ${`${month}%`} AND ${schema.transactions.count} != ${EXCLUDED_FROM_COUNT}`)
     .groupBy(schema.transactions.date)
     .orderBy(schema.transactions.date)
     .all()

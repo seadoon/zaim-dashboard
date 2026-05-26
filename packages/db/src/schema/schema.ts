@@ -16,6 +16,7 @@ export const transactions = sqliteTable(
     comment: text("comment"),
     fromAccount: text("from_account"),
     toAccount: text("to_account"),
+    count: text("count").notNull().default("集計に含む"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
