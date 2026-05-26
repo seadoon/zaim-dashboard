@@ -73,7 +73,9 @@ export function initDb() {
     }
   }
 
-  migrate(db, { migrationsFolder: join(import.meta.dirname, "../drizzle") });
+  const migrationsFolder =
+    process.env.DRIZZLE_MIGRATIONS_FOLDER ?? join(import.meta.dirname, "../drizzle");
+  migrate(db, { migrationsFolder });
 
   // Ensure zaim_account_balances exists (created by Python Zaim crawler, may be absent in MF-only runs)
   sqlite.exec(`

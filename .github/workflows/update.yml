@@ -154,6 +154,7 @@ jobs:
         run: pnpm build --filter=@moneyforward-daily-action/web
         env:
           DB_PATH: ${{ github.workspace }}/data/zaim.db
+          DRIZZLE_MIGRATIONS_FOLDER: ${{ github.workspace }}/packages/db/drizzle
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
           NEXT_PUBLIC_GITHUB_ORG: seadoon
           NEXT_PUBLIC_GITHUB_REPO: zaim-dashboard
