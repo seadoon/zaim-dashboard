@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
-import { isDatabaseAvailable, initDb } from "@moneyforward-daily-action/db";
+import { isDatabaseAvailable } from "@moneyforward-daily-action/db";
 import "./globals.css";
-
-if (isDatabaseAvailable()) {
-  initDb();
-}
 import { DatabaseZap } from "lucide-react";
 import { AccountNotifications } from "../components/info/account-notifications";
 import { Header } from "../components/layout/header";

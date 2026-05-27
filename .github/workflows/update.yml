@@ -150,6 +150,13 @@ jobs:
             --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
       - uses: ./.github/actions/setup-node
+
+      - name: Run DB migrations
+        run: pnpm --filter @moneyforward-daily-action/db run migrate
+        env:
+          DB_PATH: ${{ github.workspace }}/data/zaim.db
+          DRIZZLE_MIGRATIONS_FOLDER: ${{ github.workspace }}/packages/db/drizzle
+
       - name: Build web app
         run: pnpm build --filter=@moneyforward-daily-action/web
         env:
