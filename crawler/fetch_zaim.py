@@ -255,7 +255,7 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
         from_account = account if tx_type in ("payment", "transfer") else None
         to_account = account if tx_type == "income" else None
 
-        count = r.get("count") or "集計に含む"
+        count_flag = r.get("count") or "集計に含む"
         conn.execute(sql, (
             r["id"],
             record_date,
@@ -268,7 +268,7 @@ def upsert_transactions(conn: sqlite3.Connection, records: list[dict]) -> int:
             r.get("comment") or None,
             from_account,
             to_account,
-            count,
+            count_flag,
             now,
             now,
         ))
