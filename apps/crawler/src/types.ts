@@ -13,6 +13,10 @@ export interface NotificationData {
   zaimBankTotal: number;
   mfSecuritiesTotal: number;
   dailyChange: number | null;
+  monthlyChange: number | null;
+  monthlyChangePrevious: number | null;
+  zaimBankDailyChange: number | null;
+  mfSecuritiesDailyChange: number | null;
   updatedAt: string;
   accountIssues?: AccountIssue[];
 }

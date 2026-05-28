@@ -100,22 +100,44 @@ function formatChange(n: number): string {
   return `${sign}¥${n.toLocaleString("ja-JP")}`;
 }
 
+function formatPercent(change: number, previous: number): string {
+  if (previous === 0) return "-";
+  const pct = (change / previous) * 100;
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
 function buildSummaryContent(data: NotificationData): string {
-  const { totalAssets, zaimBankTotal, mfSecuritiesTotal, dailyChange, updatedAt } = data;
+  const {
+    totalAssets,
+    zaimBankTotal,
+    mfSecuritiesTotal,
+    dailyChange,
+    monthlyChange,
+    monthlyChangePrevious,
+    zaimBankDailyChange,
+    mfSecuritiesDailyChange,
+    updatedAt,
+  } = data;
 
   const dailyChangeText = dailyChange !== null ? formatChange(dailyChange) : "-";
+  const monthlyChangeText =
+    monthlyChange !== null && monthlyChangePrevious !== null
+      ? `${formatChange(monthlyChange)} (${formatPercent(monthlyChange, monthlyChangePrevious)})`
+      : "-";
 
   const lines: string[] = [
     "**💰 資産サマリー**",
     "",
     `**総資産** ${formatAmount(totalAssets)}`,
     `**前日比** ${dailyChangeText}`,
+    `**今月比** ${monthlyChangeText}`,
     "",
     SECTION_DIVIDER,
     "",
     "**内訳**",
-    `銀行・現金（Zaim）: ${formatAmount(zaimBankTotal)}`,
-    `証券（MoneyForward）: ${formatAmount(mfSecuritiesTotal)}`,
+    `銀行・現金（Zaim）: **${formatAmount(zaimBankTotal)}** (${zaimBankDailyChange !== null ? formatChange(zaimBankDailyChange) : "-"})`,
+    `証券（MoneyForward）: **${formatAmount(mfSecuritiesTotal)}** (${mfSecuritiesDailyChange !== null ? formatChange(mfSecuritiesDailyChange) : "-"})`,
   ];
 
   if (data.accountIssues && data.accountIssues.length > 0) {
