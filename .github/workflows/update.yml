@@ -2,11 +2,9 @@ name: Daily Update
 
 on:
   schedule:
-    # JST 7:00 → UTC 22:00 (前日)
+    # JST 7:00 → UTC 22:00 (前日) — Zaim のみ
     - cron: "0 22 * * *"
-    # JST 12:00 → UTC 3:00
-    - cron: "0 3 * * *"
-    # JST 15:30 → UTC 6:30
+    # JST 15:30 → UTC 6:30 — Zaim + MoneyForward
     - cron: "30 6 * * *"
   workflow_dispatch:
 
@@ -22,13 +20,21 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
+      run-mf: ${{ steps.check.outputs.run-mf }}
     steps:
       - id: check
         env:
           ZAIM_ID: ${{ secrets.ZAIM_ID }}
           MF_EMAIL: ${{ secrets.MF_EMAIL }}
           RUN_TASK: ${{ vars.RUN_TASK }}
-        run: echo "should-run=${{ env.ZAIM_ID != '' && env.MF_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
+        run: |
+          echo "should-run=${{ env.ZAIM_ID != '' && env.MF_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
+          # MF は 15:30 JST (UTC 6:30) または手動実行のみ
+          if [[ "${{ github.event.schedule }}" == "30 6 * * *" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run-mf=true" >> $GITHUB_OUTPUT
+          else
+            echo "run-mf=false" >> $GITHUB_OUTPUT
+          fi
 
   zaim:
     needs: check
@@ -84,7 +90,7 @@ jobs:
 
   mf:
     needs: [check, zaim]
-    if: needs.check.outputs.should-run == 'true'
+    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-mf == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
