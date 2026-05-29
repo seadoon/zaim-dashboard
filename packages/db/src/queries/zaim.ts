@@ -100,6 +100,78 @@ export function getZaimBankHistory(
   return options?.limit ? query.limit(options.limit).all() : query.all();
 }
 
+export function getMfSecuritiesByAccount(
+  db: Db = getDb(),
+): Array<{ account: string; total: number; dailyChange: number | null }> {
+  const latestSnapshot = getLatestSnapshot(db);
+  if (!latestSnapshot) return [];
+
+  return db.all<{ account: string; total: number; dailyChange: number | null }>(sql`
+    SELECT a.name as account,
+           COALESCE(SUM(hv.amount), 0) as total,
+           SUM(hv.daily_change) as dailyChange
+    FROM holding_values hv
+    JOIN holdings h ON h.id = hv.holding_id
+    JOIN accounts a ON a.id = h.account_id
+    WHERE hv.snapshot_id = ${latestSnapshot.id}
+      AND a.name IN ('SBI証券', 'SMBC日興証券', 'SMBC日興証券(Next-One)', '楽天証券')
+      AND h.type = 'asset'
+    GROUP BY a.id, a.name
+    ORDER BY total DESC
+  `);
+}
+
+function classifySecuritiesType(
+  categoryName: string | null,
+  code: string | null,
+): "日本個別株" | "米個別株" | "投資信託" | "その他" {
+  if (categoryName === "投資信託") return "投資信託";
+  if (categoryName === "株式(現物)") {
+    if (code && /^\d{4,5}$/.test(code)) return "日本個別株";
+    if (code && /^[A-Z]/.test(code)) return "米個別株";
+  }
+  return "その他";
+}
+
+export function getMfSecuritiesByType(
+  db: Db = getDb(),
+): Array<{ type: string; total: number; dailyChange: number }> {
+  const latestSnapshot = getLatestSnapshot(db);
+  if (!latestSnapshot) return [];
+
+  const rows = db.all<{
+    code: string | null;
+    category: string | null;
+    amount: number;
+    dailyChange: number | null;
+  }>(sql`
+    SELECT h.code, ac.name as category, hv.amount, hv.daily_change as dailyChange
+    FROM holding_values hv
+    JOIN holdings h ON h.id = hv.holding_id
+    JOIN accounts a ON a.id = h.account_id
+    LEFT JOIN asset_categories ac ON ac.id = h.category_id
+    WHERE hv.snapshot_id = ${latestSnapshot.id}
+      AND a.name IN ('SBI証券', 'SMBC日興証券', 'SMBC日興証券(Next-One)', '楽天証券')
+      AND h.type = 'asset'
+  `);
+
+  const grouped = new Map<string, { total: number; dailyChange: number }>();
+  for (const row of rows) {
+    const type = classifySecuritiesType(row.category, row.code);
+    const prev = grouped.get(type) ?? { total: 0, dailyChange: 0 };
+    grouped.set(type, {
+      total: prev.total + row.amount,
+      dailyChange: prev.dailyChange + (row.dailyChange ?? 0),
+    });
+  }
+
+  const ORDER = ["日本個別株", "米個別株", "投資信託", "その他"];
+  return [...grouped.entries()]
+    .map(([type, data]) => ({ type, ...data }))
+    .filter((r) => r.total > 0)
+    .sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
+}
+
 export function getMfSecuritiesAccountIssues(
   db: Db = getDb(),
 ): Array<{ name: string; status: string; errorMessage: string | null }> {

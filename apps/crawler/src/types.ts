@@ -8,6 +8,18 @@ export interface AccountIssue {
   errorMessage?: string | null;
 }
 
+export interface MfAccountBreakdown {
+  account: string;
+  total: number;
+  dailyChange: number | null;
+}
+
+export interface MfTypeBreakdown {
+  type: string;
+  total: number;
+  dailyChange: number;
+}
+
 export interface NotificationData {
   totalAssets: number;
   zaimBankTotal: number;
@@ -17,6 +29,8 @@ export interface NotificationData {
   monthlyChangePrevious: number | null;
   zaimBankDailyChange: number | null;
   mfSecuritiesDailyChange: number | null;
+  mfByAccount: MfAccountBreakdown[];
+  mfByType: MfTypeBreakdown[];
   updatedAt: string;
   accountIssues?: AccountIssue[];
 }

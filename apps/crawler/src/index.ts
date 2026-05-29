@@ -5,6 +5,8 @@ import {
   getMfSecuritiesTotal,
   getMfSecuritiesAccountIssues,
   getMfSecuritiesDailyChange,
+  getMfSecuritiesByAccount,
+  getMfSecuritiesByType,
   getDailyAssetChange,
   getCategoryChangesForPeriod,
   getZaimBankHistory,
@@ -123,6 +125,8 @@ async function main() {
           monthlyChangePrevious: monthlyChanges?.total.previous ?? null,
           zaimBankDailyChange,
           mfSecuritiesDailyChange: getMfSecuritiesDailyChange(db),
+          mfByAccount: getMfSecuritiesByAccount(db),
+          mfByType: getMfSecuritiesByType(db),
           updatedAt,
           accountIssues: securitiesIssues,
         };

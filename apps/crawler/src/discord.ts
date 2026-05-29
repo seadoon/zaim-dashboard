@@ -1,4 +1,4 @@
-import type { NotificationData } from "./types.js";
+import type { NotificationData, MfAccountBreakdown, MfTypeBreakdown } from "./types.js";
 import { log, info, error } from "./logger.js";
 
 const DISCORD_WEBHOOK_PREFIX = "https://discord.com/api/webhooks/";
@@ -139,6 +139,20 @@ function buildSummaryContent(data: NotificationData): string {
     `銀行・現金（Zaim）: **${formatAmount(zaimBankTotal)}** (${zaimBankDailyChange !== null ? formatChange(zaimBankDailyChange) : "-"})`,
     `証券（MoneyForward）: **${formatAmount(mfSecuritiesTotal)}** (${mfSecuritiesDailyChange !== null ? formatChange(mfSecuritiesDailyChange) : "-"})`,
   ];
+
+  if (data.mfByAccount.length > 0) {
+    for (const a of data.mfByAccount) {
+      const change = a.dailyChange !== null ? formatChange(a.dailyChange) : "-";
+      lines.push(`  ${a.account}: ${formatAmount(a.total)} (${change})`);
+    }
+  }
+
+  if (data.mfByType.length > 0) {
+    lines.push("");
+    for (const t of data.mfByType) {
+      lines.push(`  ${t.type}: ${formatAmount(t.total)} (${formatChange(t.dailyChange)})`);
+    }
+  }
 
   if (data.accountIssues && data.accountIssues.length > 0) {
     lines.push("", SECTION_DIVIDER, "", "**証券アカウント状態**");
