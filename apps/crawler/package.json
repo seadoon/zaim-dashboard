@@ -6,6 +6,7 @@
   "scripts": {
     "dev:scrape": "DEBUG=true SKIP_REFRESH=true tsx src/index.ts",
     "start": "tsx src/index.ts",
+    "notify": "tsx src/notify.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
