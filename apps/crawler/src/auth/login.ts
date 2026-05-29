@@ -6,10 +6,10 @@ import { hasAuthState, saveAuthState } from "./state.js";
 
 const TIMEOUTS = {
   redirect: 2000,
-  short: 5000,
-  medium: 10000,
-  long: 15000,
-  login: 30000,
+  short: 10000,
+  medium: 20000,
+  long: 45000,
+  login: 60000,
 };
 
 const SELECTORS = {
