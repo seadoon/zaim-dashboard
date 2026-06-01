@@ -78,7 +78,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="ja">
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js')` }} />
+        <script src="/register-sw.js" defer={true} />
         <SidebarProvider>
           <Header notifications={<AccountNotifications />} />
           <div className="flex pt-14">
