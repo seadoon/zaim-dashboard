@@ -21,6 +21,12 @@ export const metadata: Metadata = {
     default: "Zaim Dashboard",
   },
   description: "Zaim の家計データを可視化するダッシュボード",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "家計簿",
+  },
   openGraph: {
     title: "Zaim Dashboard",
     description: "Zaim の家計データを可視化するダッシュボード",
