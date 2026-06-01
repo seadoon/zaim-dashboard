@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { isDatabaseAvailable } from "@moneyforward-daily-action/db";
+import Script from "next/script";
 import "./globals.css";
 import { DatabaseZap } from "lucide-react";
 import { AccountNotifications } from "../components/info/account-notifications";
@@ -73,6 +74,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
   return (
     <html lang="ja">
+      <Script id="register-sw" strategy="afterInteractive">{`
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+        }
+      `}</Script>
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
         <SidebarProvider>
           <Header notifications={<AccountNotifications />} />
