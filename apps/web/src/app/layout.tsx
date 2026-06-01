@@ -74,8 +74,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
   return (
     <html lang="ja">
-      <link rel="manifest" href="/manifest.json" />
-      <meta name="theme-color" content="#ffffff" />
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#ffffff" />
+      </head>
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
         <SwRegister />
         <SidebarProvider>
