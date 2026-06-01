@@ -22,15 +22,12 @@ export const metadata: Metadata = {
     default: "Zaim Dashboard",
   },
   description: "Zaim の家計データを可視化するダッシュボード",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "家計簿",
   },
-  other: {
-    "theme-color": "#ffffff",
-  },
+  themeColor: "#ffffff",
   openGraph: {
     title: "Zaim Dashboard",
     description: "Zaim の家計データを可視化するダッシュボード",
@@ -77,6 +74,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
   return (
     <html lang="ja">
+      <link rel="manifest" href="/manifest.json" />
+      <meta name="theme-color" content="#ffffff" />
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
         <SwRegister />
         <SidebarProvider>
