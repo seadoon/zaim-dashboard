@@ -6,6 +6,7 @@ import { AccountNotifications } from "../components/info/account-notifications";
 import { Header } from "../components/layout/header";
 import { Sidebar } from "../components/layout/sidebar";
 import { SidebarProvider } from "../components/layout/sidebar-context";
+import { SwRegister } from "../components/sw-register";
 
 const metadataBase =
   process.env.GITHUB_PAGES === "true"
@@ -77,8 +78,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ja">
       <body className="min-h-dvh bg-background antialiased overflow-x-hidden tabular-nums">
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src="/register-sw.js" defer={true} />
+        <SwRegister />
         <SidebarProvider>
           <Header notifications={<AccountNotifications />} />
           <div className="flex pt-14">
