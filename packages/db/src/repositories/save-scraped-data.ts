@@ -43,6 +43,12 @@ export function saveRobofolioData(db: Db, holdings: RfHoldingInput[], date: stri
 
   const snapshotId = snapshot.id;
 
+  // 正しいブローカー名でデータが取れた場合、「不明」ブローカーを削除
+  const hasRealBrokers = holdings.some((h) => h.broker !== "不明");
+  if (hasRealBrokers) {
+    db.delete(schema.rfBrokers).where(eq(schema.rfBrokers.name, "不明")).run();
+  }
+
   for (const h of holdings) {
     // ブローカーをupsert
     let broker = db

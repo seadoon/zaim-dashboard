@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import type { Page } from "playwright";
 import type { RfHoldingInput } from "@moneyforward-daily-action/db";
 import { rfUrls } from "@moneyforward-daily-action/meta/urls";
-import { log, warn } from "../logger.js";
+import { log, info, warn } from "../logger.js";
 
 function parseAmount(text: string): number {
   const cleaned = text.replace(/[¥円,\s]/g, "").replace(/[^\d.\-+]/g, "");
@@ -55,7 +55,7 @@ export async function scrapeHoldings(page: Page): Promise<RfHoldingInput[]> {
   // 証券会社ごとのカード (.sh-account-block > .card.card-table) を走査
   const brokerCards = page.locator(".sh-account-block .card.card-table");
   const cardCount = await brokerCards.count();
-  log(`Found ${cardCount} broker cards`);
+  info(`Found ${cardCount} broker cards`);
 
   for (let i = 0; i < cardCount; i++) {
     const card = brokerCards.nth(i);
@@ -70,7 +70,7 @@ export async function scrapeHoldings(page: Page): Promise<RfHoldingInput[]> {
       })
       .catch(() => "不明");
 
-    log(`Broker ${i + 1}: ${brokerName}`);
+    info(`Broker ${i + 1}: ${brokerName}`);
 
     const rows = card.locator(".sh-stock-table tbody tr");
     const rowCount = await rows.count();
