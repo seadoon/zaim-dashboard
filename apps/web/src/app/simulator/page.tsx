@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function SimulatorPage() {
   const holdings = getHoldingsWithLatestValues();
   const investmentHoldings = holdings.filter(
-    (h) => h.categoryName && h.categoryName.includes("投資信託"),
+    (h) => h.assetType && h.assetType.includes("投資信託"),
   );
   const totalInvestment = investmentHoldings.reduce((sum, h) => sum + (h.amount ?? 0), 0);
 
