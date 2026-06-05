@@ -40,15 +40,17 @@ export async function loginToRobofolio(page: Page): Promise<void> {
   );
   log(`Input fields on login page: ${JSON.stringify(inputs)}`);
 
-  // メールアドレス入力（よく使われる属性を順にトライ）
+  // メールアドレス/ログインID入力
+  // 実際のフィールド: input[name="login_id"], input[id="username"]
   const emailSelector = [
+    'input[name="login_id"]',
+    'input[id="username"]',
     'input[type="email"]',
     'input[name="email"]',
     'input[name="user[email]"]',
     'input[id="email"]',
     'input[placeholder*="メール"]',
     'input[placeholder*="email"]',
-    'input[placeholder*="Email"]',
     'input[autocomplete="email"]',
     'input[autocomplete="username"]',
   ].join(", ");
