@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getRfBrokers } from "@moneyforward-daily-action/db";
 import { getHoldingsWithLatestValues } from "@moneyforward-daily-action/db";
 import { rfUrls } from "@moneyforward-daily-action/meta/urls";
+import { Landmark } from "lucide-react";
 import { PageLayout } from "../../components/layout/page-layout";
 import { AmountDisplay } from "../../components/ui/amount-display";
 import { Card, CardHeader, CardTitle } from "../../components/ui/card";
@@ -38,7 +39,7 @@ export default function AccountsPage() {
               <Card key={b.name}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle>{b.name}</CardTitle>
+                    <CardTitle icon={Landmark}>{b.name}</CardTitle>
                     <AmountDisplay amount={b.total} size="sm" weight="bold" />
                   </div>
                   <p className="text-sm text-muted-foreground">{b.count}銘柄</p>
