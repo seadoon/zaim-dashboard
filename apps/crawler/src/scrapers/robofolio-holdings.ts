@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import type { RfHoldingInput } from "@moneyforward-daily-action/db/repository/save-scraped-data";
+import type { RfHoldingInput } from "@moneyforward-daily-action/db";
 import { rfUrls } from "@moneyforward-daily-action/meta/urls";
 import { log, debug, warn } from "../logger.js";
 

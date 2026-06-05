@@ -142,6 +142,15 @@ jobs:
           DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
 
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robofolio-debug
+          path: apps/crawler/debug/
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Upload DB to R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

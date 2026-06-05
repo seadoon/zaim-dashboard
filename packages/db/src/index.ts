@@ -99,3 +99,4 @@ export * from "./queries/asset";
 export * from "./queries/holding";
 export * from "./queries/account";
 export * from "./queries/zaim";
+export * from "./repositories/save-scraped-data";
