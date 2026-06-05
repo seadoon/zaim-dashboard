@@ -78,14 +78,47 @@ export async function loginToRobofolio(page: Page): Promise<void> {
   log("Submitting login form...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
-    page.click('button[type="submit"], input[type="submit"], .btn-login, button:has-text("ログイン"), button:has-text("Sign in"), button:has-text("ログイン")'),
+    page.click('button[type="submit"]'),
   ]);
 
-  const currentUrl = page.url();
-  if (currentUrl.includes("/login") || currentUrl.includes("/sign_in")) {
+  let currentUrl = page.url();
+  log(`After form submit, URL: ${currentUrl}`);
+
+  // Google OAuth にリダイレクトされた場合はそのフローを処理
+  if (currentUrl.includes("accounts.google.com")) {
+    log("Redirected to Google OAuth, proceeding with Google sign-in...");
+    await handleGoogleAuth(page, email, password);
+    currentUrl = page.url();
+  }
+
+  if (currentUrl.includes("/login") || currentUrl.includes("/sign_in") || currentUrl.includes("accounts.google.com")) {
     await saveDebug(page, "login-failed");
-    throw new Error(`Login failed - still on login page: ${currentUrl}`);
+    throw new Error(`Login failed - URL after login: ${currentUrl}`);
   }
 
   info(`Login successful - current URL: ${currentUrl}`);
+}
+
+async function handleGoogleAuth(page: Page, email: string, password: string): Promise<void> {
+  // Google メール入力
+  await page.waitForSelector('input[type="email"]', { timeout: 15000 });
+  await saveDebug(page, "google-email-page");
+  log("Filling Google email...");
+  await page.fill('input[type="email"]', email);
+  await page.click('#identifierNext');
+
+  // Google パスワード入力
+  await page.waitForSelector('input[type="password"]', { timeout: 15000 });
+  await saveDebug(page, "google-password-page");
+  log("Filling Google password...");
+  await page.fill('input[type="password"]', password);
+
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
+    page.click('#passwordNext'),
+  ]);
+
+  const url = page.url();
+  log(`After Google auth, URL: ${url}`);
+  await saveDebug(page, "after-google-auth");
 }
