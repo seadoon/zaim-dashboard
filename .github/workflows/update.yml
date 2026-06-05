@@ -4,8 +4,6 @@ on:
   schedule:
     # JST 7:00 → UTC 22:00 (前日) — Zaim のみ
     - cron: "0 22 * * *"
-    # JST 15:30 → UTC 6:30 — Zaim + Robofolio + Deploy
-    - cron: "30 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -29,8 +27,8 @@ jobs:
           RUN_TASK: ${{ vars.RUN_TASK }}
         run: |
           echo "should-run=${{ env.ZAIM_ID != '' && env.ROBOFOLIO_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
-          # Robofolio は 15:30 JST (UTC 6:30) または手動実行のみ
-          if [[ "${{ github.event.schedule }}" == "30 6 * * *" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # Robofolio は手動実行のみ（robofolioの更新ボタンを手動で押した後に実行）
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "run-rf=true" >> $GITHUB_OUTPUT
           else
             echo "run-rf=false" >> $GITHUB_OUTPUT
