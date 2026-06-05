@@ -163,7 +163,7 @@ def scrape_account_balances(driver) -> list[dict]:
             if "plus" in p.get("cls", ""):
                 amount = parse_yen(p["text"])
                 if amount is not None and amount > 0:
-                    bank_accounts.append({"account_name": p["name"], "balance": amount})
+                    bank_accounts.append({"account_name": p["name"], "balance": amount, "category": "銀行"})
                     log.info("  銀行: %s → %d", p["name"], amount)
 
         # window.assets の 銀行 合計と突合確認
@@ -173,16 +173,21 @@ def scrape_account_balances(driver) -> list[dict]:
         scraped_bank_total = sum(a["balance"] for a in bank_accounts)
         log.info("assets.銀行合計=%d  スクレイプ合計=%d", asset_bank_total, scraped_bank_total)
 
+        # 銀行: 個別口座が取れた場合はそれを使い、それ以外はカテゴリ合計
         if bank_accounts:
-            accounts = bank_accounts
+            accounts.extend(bank_accounts)
         else:
-            # 個別取得失敗時は window.assets のカテゴリ別合計でフォールバック
-            log.warning("個別口座取得失敗 — window.assets でフォールバック")
-            for cat in asset_categories:
-                name = cat.get("name", "")
-                amount = int(cat.get("amount", 0))
-                if amount > 0:
-                    accounts.append({"account_name": name, "balance": amount})
+            log.warning("個別口座取得失敗 — window.assets の銀行合計でフォールバック")
+            if asset_bank_total > 0:
+                accounts.append({"account_name": "銀行", "balance": asset_bank_total, "category": "銀行"})
+
+        # 銀行以外のカテゴリを window.assets から保存（マイナス残高のカードも含む）
+        for cat in asset_categories:
+            name = cat.get("name", "")
+            if name == "銀行":
+                continue
+            amount = int(cat.get("amount", 0))
+            accounts.append({"account_name": name, "balance": amount, "category": name})
 
     except Exception as exc:
         import traceback
@@ -199,11 +204,12 @@ def upsert_account_balances(conn: sqlite3.Connection, accounts: list[dict]) -> i
     today = date.today().isoformat()
 
     conn.execute("DELETE FROM zaim_account_balances")
-    sql = "INSERT INTO zaim_account_balances (account_name, balance, updated_at) VALUES (?, ?, ?)"
+    sql = "INSERT INTO zaim_account_balances (account_name, balance, category, updated_at) VALUES (?, ?, ?, ?)"
     for a in accounts:
-        conn.execute(sql, (a["account_name"], a["balance"], now))
+        conn.execute(sql, (a["account_name"], a["balance"], a.get("category"), now))
 
-    total = sum(a["balance"] for a in accounts)
+    # zaim_daily_bank_totals: 銀行カテゴリのみ合計
+    total = sum(a["balance"] for a in accounts if a.get("category") == "銀行")
     conn.execute(
         """
         INSERT INTO zaim_daily_bank_totals (date, total, created_at, updated_at)

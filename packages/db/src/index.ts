@@ -111,6 +111,8 @@ export function initDb() {
       updated_at   TEXT NOT NULL
     )
   `);
+  // Add category column if missing (existing DBs won't have it)
+  try { sqlite.exec(`ALTER TABLE zaim_account_balances ADD COLUMN category TEXT`); } catch {}
 
   return db;
 }
