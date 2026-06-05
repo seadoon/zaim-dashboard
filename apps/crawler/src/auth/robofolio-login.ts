@@ -1,6 +1,7 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import type { Page } from "playwright";
 import { rfUrls } from "@moneyforward-daily-action/meta/urls";
-import { info, log, debug } from "../logger.js";
+import { info, log, debug, warn } from "../logger.js";
 
 function getCredentials() {
   const email = process.env.ROBOFOLIO_EMAIL;
@@ -11,16 +12,33 @@ function getCredentials() {
   return { email, password };
 }
 
+async function saveDebug(page: Page, name: string) {
+  mkdirSync("debug", { recursive: true });
+  await page.screenshot({ path: `debug/${name}.png`, fullPage: true }).catch(() => {});
+  writeFileSync(`debug/${name}.html`, await page.content().catch(() => ""));
+  log(`Debug saved: debug/${name}.png`);
+}
+
 export async function loginToRobofolio(page: Page): Promise<void> {
   const { email, password } = getCredentials();
 
   info("Navigating to robofolio login page...");
   await page.goto(rfUrls.login, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-  // ページが完全に読み込まれるまで待機
   await page.waitForLoadState("networkidle").catch(() => {});
 
-  debug("Login page loaded");
+  await saveDebug(page, "login-page");
+
+  // ページのすべてのinputフィールドをログに出す（デバッグ用）
+  const inputs = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("input")).map((el) => ({
+      type: el.type,
+      name: el.name,
+      id: el.id,
+      placeholder: el.placeholder,
+      className: el.className.slice(0, 50),
+    })),
+  );
+  log(`Input fields on login page: ${JSON.stringify(inputs)}`);
 
   // メールアドレス入力（よく使われる属性を順にトライ）
   const emailSelector = [
@@ -30,6 +48,9 @@ export async function loginToRobofolio(page: Page): Promise<void> {
     'input[id="email"]',
     'input[placeholder*="メール"]',
     'input[placeholder*="email"]',
+    'input[placeholder*="Email"]',
+    'input[autocomplete="email"]',
+    'input[autocomplete="username"]',
   ].join(", ");
 
   const passwordSelector = [
@@ -40,8 +61,14 @@ export async function loginToRobofolio(page: Page): Promise<void> {
   ].join(", ");
 
   log("Filling email field...");
-  await page.waitForSelector(emailSelector, { timeout: 10000 });
-  await page.fill(emailSelector, email);
+  const emailInput = page.locator(emailSelector).first();
+  const emailVisible = await emailInput.isVisible().catch(() => false);
+  if (!emailVisible) {
+    warn(`Email field not found with selector. Available inputs: ${JSON.stringify(inputs)}`);
+    await saveDebug(page, "login-no-email-field");
+    throw new Error("Email input field not found on login page");
+  }
+  await emailInput.fill(email);
 
   log("Filling password field...");
   await page.fill(passwordSelector, password);
@@ -49,16 +76,14 @@ export async function loginToRobofolio(page: Page): Promise<void> {
   log("Submitting login form...");
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
-    page.click('button[type="submit"], input[type="submit"], .btn-login, button:has-text("ログイン")'),
+    page.click('button[type="submit"], input[type="submit"], .btn-login, button:has-text("ログイン"), button:has-text("Sign in"), button:has-text("ログイン")'),
   ]);
 
-  // ログイン後ページがログインページに戻っていたらエラー
   const currentUrl = page.url();
   if (currentUrl.includes("/login") || currentUrl.includes("/sign_in")) {
-    // スクリーンショットを保存して詳細を確認
-    await page.screenshot({ path: "debug/login-failed.png", fullPage: true }).catch(() => {});
+    await saveDebug(page, "login-failed");
     throw new Error(`Login failed - still on login page: ${currentUrl}`);
   }
 
-  info("Login successful");
+  info(`Login successful - current URL: ${currentUrl}`);
 }
