@@ -1,4 +1,4 @@
-import type { NotificationData, MfAccountBreakdown, MfTypeBreakdown } from "./types.js";
+import type { NotificationData, RfBrokerBreakdown, RfTypeBreakdown } from "./types.js";
 import { log, info, error } from "./logger.js";
 
 const DISCORD_WEBHOOK_PREFIX = "https://discord.com/api/webhooks/";
@@ -34,7 +34,6 @@ export async function sendDiscordNotification(data: NotificationData): Promise<v
 
   const content = buildSummaryContent(data);
   const payloads = buildPayloads(content, avatarUrl);
-
   await postPayloads(webhookUrl, payloads);
   info("Discord notification sent successfully!");
 }
@@ -57,7 +56,6 @@ export async function sendDiscordErrorNotification(err: Error): Promise<void> {
   const timestamp = now.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
   const content = buildErrorContent(err.message, timestamp);
   const payloads = buildPayloads(content, avatarUrl);
-
   await postPayloads(webhookUrl, payloads);
   info("Discord error notification sent successfully!");
 }
@@ -111,12 +109,12 @@ function buildSummaryContent(data: NotificationData): string {
   const {
     totalAssets,
     zaimBankTotal,
-    mfSecuritiesTotal,
+    rfSecuritiesTotal,
     dailyChange,
     monthlyChange,
     monthlyChangePrevious,
     zaimBankDailyChange,
-    mfSecuritiesDailyChange,
+    rfSecuritiesDailyChange,
     updatedAt,
   } = data;
 
@@ -137,29 +135,20 @@ function buildSummaryContent(data: NotificationData): string {
     "",
     "**内訳**",
     `銀行・現金（Zaim）: **${formatAmount(zaimBankTotal)}** (${zaimBankDailyChange !== null ? formatChange(zaimBankDailyChange) : "-"})`,
-    `証券（MoneyForward）: **${formatAmount(mfSecuritiesTotal)}** (${mfSecuritiesDailyChange !== null ? formatChange(mfSecuritiesDailyChange) : "-"})`,
+    `証券（robofolio）: **${formatAmount(rfSecuritiesTotal)}** (${rfSecuritiesDailyChange !== null ? formatChange(rfSecuritiesDailyChange) : "-"})`,
   ];
 
-  if (data.mfByAccount.length > 0) {
-    for (const a of data.mfByAccount) {
-      const change = a.dailyChange !== null ? formatChange(a.dailyChange) : "-";
-      lines.push(`  ${a.account}: ${formatAmount(a.total)} (${change})`);
+  if (data.rfByBroker.length > 0) {
+    for (const b of data.rfByBroker) {
+      const change = b.dailyChange !== null ? formatChange(b.dailyChange) : "-";
+      lines.push(`  ${b.broker}: ${formatAmount(b.total)} (${change})`);
     }
   }
 
-  if (data.mfByType.length > 0) {
+  if (data.rfByType.length > 0) {
     lines.push("");
-    for (const t of data.mfByType) {
+    for (const t of data.rfByType) {
       lines.push(`  ${t.type}: ${formatAmount(t.total)} (${formatChange(t.dailyChange)})`);
-    }
-  }
-
-  if (data.accountIssues && data.accountIssues.length > 0) {
-    lines.push("", SECTION_DIVIDER, "", "**証券アカウント状態**");
-    for (const issue of data.accountIssues) {
-      const statusLabel = issue.status === "updating" ? "更新中" : "エラー";
-      const detail = issue.errorMessage ? ` (${issue.errorMessage})` : "";
-      lines.push(`• ${issue.name} (${statusLabel}${detail})`);
     }
   }
 
@@ -174,7 +163,7 @@ function buildSummaryContent(data: NotificationData): string {
 
 function buildErrorContent(message: string, timestamp: string): string {
   return [
-    "**🚨 MoneyForward スクレイピングエラー**",
+    "**🚨 robofolio スクレイピングエラー**",
     "",
     "```text",
     message || "Unknown error",

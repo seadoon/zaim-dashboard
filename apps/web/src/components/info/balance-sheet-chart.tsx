@@ -1,29 +1,20 @@
 import {
   getAssetBreakdownByCategory,
-  getLiabilityBreakdownByCategory,
   getLatestTotalAssets,
 } from "@moneyforward-daily-action/db";
 import { Scale } from "lucide-react";
 import { EmptyState } from "../ui/empty-state";
 import { BalanceSheetChartClient } from "./balance-sheet-chart.client";
 
-interface BalanceSheetChartProps {
-  groupId?: string;
-}
-
-export function BalanceSheetChart({ groupId }: BalanceSheetChartProps) {
-  const assets = getAssetBreakdownByCategory(groupId);
-  const liabilities = getLiabilityBreakdownByCategory(groupId);
-  const totalAssets = getLatestTotalAssets(groupId);
+export function BalanceSheetChart() {
+  const assets = getAssetBreakdownByCategory();
+  const totalAssets = getLatestTotalAssets();
 
   if (totalAssets === null) {
     return <EmptyState icon={Scale} title="バランスシート" />;
   }
 
-  const totalLiabilities = liabilities.reduce((sum, l) => sum + l.amount, 0);
-  const netAssets = totalAssets - totalLiabilities;
-
   return (
-    <BalanceSheetChartClient assets={assets} liabilities={liabilities} netAssets={netAssets} />
+    <BalanceSheetChartClient assets={assets} liabilities={[]} netAssets={totalAssets} />
   );
 }

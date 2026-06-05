@@ -2,14 +2,13 @@ import {
   initDb,
   closeDb,
   getZaimBankTotal,
-  getMfSecuritiesTotal,
-  getMfSecuritiesAccountIssues,
-  getMfSecuritiesDailyChange,
-  getMfSecuritiesByAccount,
-  getMfSecuritiesByType,
   getDailyAssetChange,
   getCategoryChangesForPeriod,
   getZaimBankHistory,
+  getRfSecuritiesTotal,
+  getRfSecuritiesDailyChange,
+  getRfSecuritiesTotalByBroker,
+  getRfSecuritiesTotalByType,
 } from "@moneyforward-daily-action/db";
 import path from "node:path";
 import { sendDiscordNotification } from "./discord.js";
@@ -26,35 +25,28 @@ async function main() {
 
   try {
     const zaimBankTotal = getZaimBankTotal(db);
-    const mfSecuritiesTotal = getMfSecuritiesTotal(db);
-    const dailyAssetChange = getDailyAssetChange(undefined, db);
-    const monthlyChanges = getCategoryChangesForPeriod("monthly", undefined, db);
+    const rfSecuritiesTotal = getRfSecuritiesTotal(db);
+    const dailyAssetChange = getDailyAssetChange(db);
+    const monthlyChanges = getCategoryChangesForPeriod("monthly", db);
     const zaimHistory = getZaimBankHistory({ limit: 2 }, db);
-    const securitiesIssues = getMfSecuritiesAccountIssues(db).map((a) => ({
-      name: a.name,
-      status: a.status as "updating" | "error",
-      errorMessage: a.errorMessage,
-    }));
 
     const now = new Date();
     const updatedAt = now.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-
     const zaimBankDailyChange =
       zaimHistory.length >= 2 ? zaimHistory[0].total - zaimHistory[1].total : null;
 
     await sendDiscordNotification({
-      totalAssets: zaimBankTotal + mfSecuritiesTotal,
+      totalAssets: zaimBankTotal + rfSecuritiesTotal,
       zaimBankTotal,
-      mfSecuritiesTotal,
+      rfSecuritiesTotal,
       dailyChange: dailyAssetChange?.change ?? null,
       monthlyChange: monthlyChanges?.total.change ?? null,
       monthlyChangePrevious: monthlyChanges?.total.previous ?? null,
       zaimBankDailyChange,
-      mfSecuritiesDailyChange: getMfSecuritiesDailyChange(db),
-      mfByAccount: getMfSecuritiesByAccount(db),
-      mfByType: getMfSecuritiesByType(db),
+      rfSecuritiesDailyChange: getRfSecuritiesDailyChange(db),
+      rfByBroker: getRfSecuritiesTotalByBroker(db),
+      rfByType: getRfSecuritiesTotalByType(db),
       updatedAt,
-      accountIssues: securitiesIssues,
     });
 
     info("Notification sent!");

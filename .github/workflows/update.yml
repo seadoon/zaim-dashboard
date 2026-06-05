@@ -4,7 +4,7 @@ on:
   schedule:
     # JST 7:00 → UTC 22:00 (前日) — Zaim のみ
     - cron: "0 22 * * *"
-    # JST 15:30 → UTC 6:30 — Zaim + MoneyForward
+    # JST 15:30 → UTC 6:30 — Zaim + Robofolio + Deploy
     - cron: "30 6 * * *"
   workflow_dispatch:
 
@@ -20,20 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
-      run-mf: ${{ steps.check.outputs.run-mf }}
+      run-rf: ${{ steps.check.outputs.run-rf }}
     steps:
       - id: check
         env:
           ZAIM_ID: ${{ secrets.ZAIM_ID }}
-          MF_EMAIL: ${{ secrets.MF_EMAIL }}
+          ROBOFOLIO_EMAIL: ${{ secrets.ROBOFOLIO_EMAIL }}
           RUN_TASK: ${{ vars.RUN_TASK }}
         run: |
-          echo "should-run=${{ env.ZAIM_ID != '' && env.MF_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
-          # MF は 15:30 JST (UTC 6:30) または手動実行のみ
+          echo "should-run=${{ env.ZAIM_ID != '' && env.ROBOFOLIO_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
+          # Robofolio は 15:30 JST (UTC 6:30) または手動実行のみ
           if [[ "${{ github.event.schedule }}" == "30 6 * * *" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "run-mf=true" >> $GITHUB_OUTPUT
+            echo "run-rf=true" >> $GITHUB_OUTPUT
           else
-            echo "run-mf=false" >> $GITHUB_OUTPUT
+            echo "run-rf=false" >> $GITHUB_OUTPUT
           fi
 
   zaim:
@@ -90,7 +90,7 @@ jobs:
 
   notify:
     needs: [check, zaim]
-    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-mf == 'false'
+    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-rf == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -113,18 +113,14 @@ jobs:
           DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
 
-  mf:
+  robofolio:
     needs: [check, zaim]
-    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-mf == 'true'
+    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-rf == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node
-      - uses: ./.github/actions/auth-state-cache
-        with:
-          mode: restore
-          enabled: ${{ vars.CACHE_AUTH_STATE }}
 
       - name: Download DB from R2
         env:
@@ -140,19 +136,11 @@ jobs:
       - run: pnpm --filter @zaim-dashboard/crawler exec playwright install --with-deps chromium
       - run: pnpm --filter @zaim-dashboard/crawler start
         env:
-          MF_EMAIL: ${{ secrets.MF_EMAIL }}
-          MF_PASSWORD: ${{ secrets.MF_PASSWORD }}
-          MF_TOTP_SECRET: ${{ secrets.MF_TOTP_SECRET }}
+          ROBOFOLIO_EMAIL: ${{ secrets.ROBOFOLIO_EMAIL }}
+          ROBOFOLIO_PASSWORD: ${{ secrets.ROBOFOLIO_PASSWORD }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
-          SKIP_REFRESH: "true"
-
-      - uses: ./.github/actions/auth-state-cache
-        if: always()
-        with:
-          mode: save
-          enabled: ${{ vars.CACHE_AUTH_STATE }}
 
       - name: Upload DB to R2
         env:
@@ -164,8 +152,8 @@ jobs:
             --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
   deploy:
-    needs: mf
-    if: needs.mf.result == 'success'
+    needs: robofolio
+    if: needs.robofolio.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -197,6 +185,7 @@ jobs:
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
           NEXT_PUBLIC_GITHUB_ORG: seadoon
           NEXT_PUBLIC_GITHUB_REPO: zaim-dashboard
+
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:

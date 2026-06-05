@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { hasInvestmentHoldings } from "@moneyforward-daily-action/db";
-import { mfUrls } from "@moneyforward-daily-action/meta/urls";
+import { rfUrls } from "@moneyforward-daily-action/meta/urls";
 import { AssetHistoryChart } from "../../components/info/asset-history-chart";
 import { BalanceSheetChart } from "../../components/info/balance-sheet-chart";
 import { HoldingsTable } from "../../components/info/holdings-table";
@@ -15,12 +15,11 @@ export default function BSPage() {
   const showUnrealizedGain = hasInvestmentHoldings();
 
   return (
-    <PageLayout title="資産" href={mfUrls.portfolio}>
+    <PageLayout title="資産" href={rfUrls.portfolio}>
       <BalanceSheetChart />
       <AssetHistoryChart />
       {showUnrealizedGain && <UnrealizedGainCard />}
-      <HoldingsTable type="asset" />
-      <HoldingsTable type="liability" />
+      <HoldingsTable />
     </PageLayout>
   );
 }

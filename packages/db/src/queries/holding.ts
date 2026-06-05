@@ -1,167 +1,180 @@
-import { desc, eq, and, isNotNull, inArray } from "drizzle-orm";
+import { desc, eq, isNotNull, and } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
-import { resolveGroupId, getAccountIdsForGroup } from "../shared/group-filter";
-
-const INVESTMENT_CATEGORIES = ["株式(現物)", "投資信託"];
 
 export function getLatestSnapshot(db: Db = getDb()) {
   return db
     .select()
-    .from(schema.dailySnapshots)
-    .orderBy(desc(schema.dailySnapshots.id))
+    .from(schema.rfSnapshots)
+    .orderBy(desc(schema.rfSnapshots.date))
     .limit(1)
     .get();
 }
 
-export function buildHoldingWhereCondition(
-  snapshotId: number,
-  accountIds: number[],
-  additionalCondition?: ReturnType<typeof eq>,
-) {
-  const baseCondition = eq(schema.holdingValues.snapshotId, snapshotId);
-
-  if (accountIds.length > 0) {
-    const conditions = [baseCondition, inArray(schema.holdings.accountId, accountIds)];
-    if (additionalCondition) {
-      conditions.push(additionalCondition);
-    }
-    return and(...conditions);
-  }
-
-  if (additionalCondition) {
-    return and(baseCondition, additionalCondition);
-  }
-
-  return baseCondition;
-}
-
-export function getHoldingsWithLatestValues(groupIdParam?: string, db: Db = getDb()) {
-  const latestSnapshot = getLatestSnapshot(db);
-
-  if (!latestSnapshot) {
-    return [];
-  }
-
-  const groupId = resolveGroupId(db, groupIdParam);
-  const accountIds = groupId ? getAccountIdsForGroup(db, groupId) : [];
-
-  const whereCondition = buildHoldingWhereCondition(latestSnapshot.id, accountIds);
-
-  return db
-    .select({
-      id: schema.holdings.id,
-      name: schema.holdings.name,
-      type: schema.holdings.type,
-      liabilityCategory: schema.holdings.liabilityCategory,
-      categoryId: schema.holdings.categoryId,
-      categoryName: schema.assetCategories.name,
-      accountId: schema.holdings.accountId,
-      accountName: schema.accounts.name,
-      institution: schema.accounts.institution,
-      amount: schema.holdingValues.amount,
-      quantity: schema.holdingValues.quantity,
-      unitPrice: schema.holdingValues.unitPrice,
-      avgCostPrice: schema.holdingValues.avgCostPrice,
-      dailyChange: schema.holdingValues.dailyChange,
-      unrealizedGain: schema.holdingValues.unrealizedGain,
-      unrealizedGainPct: schema.holdingValues.unrealizedGainPct,
-    })
-    .from(schema.holdingValues)
-    .innerJoin(schema.holdings, eq(schema.holdings.id, schema.holdingValues.holdingId))
-    .leftJoin(schema.assetCategories, eq(schema.assetCategories.id, schema.holdings.categoryId))
-    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.holdings.accountId))
-    .where(whereCondition)
-    .all();
-}
-
-export interface HoldingWithDailyChange {
+export type HoldingWithValue = {
   id: number;
   name: string;
   code: string | null;
-  categoryName: string | null;
-  accountName: string | null;
-  dailyChange: number;
-}
+  assetType: string;
+  brokerName: string;
+  amount: number;
+  quantity: number | null;
+  unitPrice: number | null;
+  avgCostPrice: number | null;
+  unrealizedGain: number | null;
+  unrealizedGainPct: number | null;
+  dailyChange: number | null;
+};
 
-export function getHoldingsWithDailyChange(
-  groupIdParam?: string,
-  db: Db = getDb(),
-): HoldingWithDailyChange[] {
-  const latestSnapshot = getLatestSnapshot(db);
-
-  if (!latestSnapshot) {
-    return [];
-  }
-
-  const groupId = resolveGroupId(db, groupIdParam);
-  const accountIds = groupId ? getAccountIdsForGroup(db, groupId) : [];
-
-  const whereCondition = buildHoldingWhereCondition(
-    latestSnapshot.id,
-    accountIds,
-    isNotNull(schema.holdingValues.dailyChange),
-  );
+export function getHoldingsWithLatestValues(db: Db = getDb()): HoldingWithValue[] {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return [];
 
   return db
     .select({
-      id: schema.holdings.id,
-      name: schema.holdings.name,
-      code: schema.holdings.code,
-      categoryName: schema.assetCategories.name,
-      accountName: schema.accounts.name,
-      dailyChange: schema.holdingValues.dailyChange,
+      id: schema.rfHoldings.id,
+      name: schema.rfHoldings.name,
+      code: schema.rfHoldings.code,
+      assetType: schema.rfHoldings.assetType,
+      brokerName: schema.rfBrokers.name,
+      amount: schema.rfHoldingValues.amount,
+      quantity: schema.rfHoldingValues.quantity,
+      unitPrice: schema.rfHoldingValues.unitPrice,
+      avgCostPrice: schema.rfHoldingValues.avgCostPrice,
+      unrealizedGain: schema.rfHoldingValues.unrealizedGain,
+      unrealizedGainPct: schema.rfHoldingValues.unrealizedGainPct,
+      dailyChange: schema.rfHoldingValues.dailyChange,
     })
-    .from(schema.holdingValues)
-    .innerJoin(schema.holdings, eq(schema.holdings.id, schema.holdingValues.holdingId))
-    .leftJoin(schema.assetCategories, eq(schema.assetCategories.id, schema.holdings.categoryId))
-    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.holdings.accountId))
-    .where(whereCondition)
-    .all() as HoldingWithDailyChange[];
-}
-
-export function getHoldingsByAccountId(accountId: number, groupIdParam?: string, db: Db = getDb()) {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return [];
-
-  const accountIds = getAccountIdsForGroup(db, groupId);
-  if (accountIds.length === 0 || !accountIds.includes(accountId)) return [];
-
-  const latestSnapshot = getLatestSnapshot(db);
-  if (!latestSnapshot) return [];
-
-  const whereCondition = buildHoldingWhereCondition(
-    latestSnapshot.id,
-    [accountId],
-  );
-
-  return db
-    .select({
-      id: schema.holdings.id,
-      name: schema.holdings.name,
-      type: schema.holdings.type,
-      liabilityCategory: schema.holdings.liabilityCategory,
-      categoryName: schema.assetCategories.name,
-      accountName: schema.accounts.name,
-      institution: schema.accounts.institution,
-      amount: schema.holdingValues.amount,
-      quantity: schema.holdingValues.quantity,
-      unitPrice: schema.holdingValues.unitPrice,
-      avgCostPrice: schema.holdingValues.avgCostPrice,
-      dailyChange: schema.holdingValues.dailyChange,
-      unrealizedGain: schema.holdingValues.unrealizedGain,
-      unrealizedGainPct: schema.holdingValues.unrealizedGainPct,
-    })
-    .from(schema.holdingValues)
-    .innerJoin(schema.holdings, eq(schema.holdings.id, schema.holdingValues.holdingId))
-    .leftJoin(schema.assetCategories, eq(schema.assetCategories.id, schema.holdings.categoryId))
-    .leftJoin(schema.accounts, eq(schema.accounts.id, schema.holdings.accountId))
-    .where(whereCondition)
+    .from(schema.rfHoldingValues)
+    .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+    .innerJoin(schema.rfBrokers, eq(schema.rfHoldings.brokerId, schema.rfBrokers.id))
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
+    .orderBy(desc(schema.rfHoldingValues.amount))
     .all();
 }
 
-export function hasInvestmentHoldings(groupIdParam?: string, db: Db = getDb()) {
-  const holdings = getHoldingsWithLatestValues(groupIdParam, db);
-  return holdings.some(
-    (h) => h.categoryName !== null && INVESTMENT_CATEGORIES.includes(h.categoryName),
-  );
+export function getHoldingsWithDailyChange(db: Db = getDb()) {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return [];
+
+  return db
+    .select({
+      id: schema.rfHoldings.id,
+      name: schema.rfHoldings.name,
+      code: schema.rfHoldings.code,
+      assetType: schema.rfHoldings.assetType,
+      brokerName: schema.rfBrokers.name,
+      amount: schema.rfHoldingValues.amount,
+      dailyChange: schema.rfHoldingValues.dailyChange,
+    })
+    .from(schema.rfHoldingValues)
+    .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+    .innerJoin(schema.rfBrokers, eq(schema.rfHoldings.brokerId, schema.rfBrokers.id))
+    .where(
+      and(
+        eq(schema.rfHoldingValues.snapshotId, latest.id),
+        isNotNull(schema.rfHoldingValues.dailyChange),
+      ),
+    )
+    .orderBy(desc(schema.rfHoldingValues.dailyChange))
+    .all();
+}
+
+export function hasInvestmentHoldings(db: Db = getDb()): boolean {
+  const snapshot = getLatestSnapshot(db);
+  if (!snapshot) return false;
+  const row = db
+    .select({ id: schema.rfHoldingValues.id })
+    .from(schema.rfHoldingValues)
+    .where(eq(schema.rfHoldingValues.snapshotId, snapshot.id))
+    .limit(1)
+    .get();
+  return !!row;
+}
+
+export function getRfSecuritiesTotalByBroker(db: Db = getDb()) {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return [];
+
+  const rows = db
+    .select({
+      brokerName: schema.rfBrokers.name,
+      amount: schema.rfHoldingValues.amount,
+      dailyChange: schema.rfHoldingValues.dailyChange,
+    })
+    .from(schema.rfHoldingValues)
+    .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+    .innerJoin(schema.rfBrokers, eq(schema.rfHoldings.brokerId, schema.rfBrokers.id))
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
+    .all();
+
+  const brokerMap = new Map<string, { total: number; dailyChange: number | null }>();
+  for (const row of rows) {
+    const prev = brokerMap.get(row.brokerName) ?? { total: 0, dailyChange: null };
+    brokerMap.set(row.brokerName, {
+      total: prev.total + row.amount,
+      dailyChange:
+        row.dailyChange !== null ? (prev.dailyChange ?? 0) + row.dailyChange : prev.dailyChange,
+    });
+  }
+
+  return [...brokerMap.entries()]
+    .map(([broker, v]) => ({ broker, total: v.total, dailyChange: v.dailyChange }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export function getRfSecuritiesTotalByType(db: Db = getDb()) {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return [];
+
+  const rows = db
+    .select({
+      assetType: schema.rfHoldings.assetType,
+      amount: schema.rfHoldingValues.amount,
+      dailyChange: schema.rfHoldingValues.dailyChange,
+    })
+    .from(schema.rfHoldingValues)
+    .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
+    .all();
+
+  const typeMap = new Map<string, { total: number; dailyChange: number }>();
+  for (const row of rows) {
+    const prev = typeMap.get(row.assetType) ?? { total: 0, dailyChange: 0 };
+    typeMap.set(row.assetType, {
+      total: prev.total + row.amount,
+      dailyChange: prev.dailyChange + (row.dailyChange ?? 0),
+    });
+  }
+
+  return [...typeMap.entries()]
+    .map(([type, v]) => ({ type, total: v.total, dailyChange: v.dailyChange }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export function getRfSecuritiesTotal(db: Db = getDb()): number {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return 0;
+
+  const rows = db
+    .select({ amount: schema.rfHoldingValues.amount })
+    .from(schema.rfHoldingValues)
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
+    .all();
+
+  return rows.reduce((sum, r) => sum + r.amount, 0);
+}
+
+export function getRfSecuritiesDailyChange(db: Db = getDb()): number | null {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return null;
+
+  const rows = db
+    .select({ dailyChange: schema.rfHoldingValues.dailyChange })
+    .from(schema.rfHoldingValues)
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
+    .all();
+
+  const withChange = rows.filter((r) => r.dailyChange !== null);
+  if (withChange.length === 0) return null;
+  return withChange.reduce((sum, r) => sum + (r.dailyChange ?? 0), 0);
 }

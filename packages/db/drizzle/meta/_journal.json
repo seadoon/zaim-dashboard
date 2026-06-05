@@ -15,6 +15,27 @@
       "when": 1778600833565,
       "tag": "0001_fresh_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1778600833566,
+      "tag": "0002_zaim_bank_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1778600833567,
+      "tag": "0003_transactions_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1749081600000,
+      "tag": "0004_robofolio",
+      "breakpoints": true
     }
   ]
 }

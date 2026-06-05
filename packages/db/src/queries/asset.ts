@@ -1,8 +1,7 @@
 import { desc, eq, sql, and } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
-import { resolveGroupId } from "../shared/group-filter";
-import { getHoldingsWithLatestValues } from "./holding";
 import { getZaimDailyBankTotal } from "./zaim";
+import { getLatestSnapshot } from "./holding";
 
 export function parseDateString(dateStr: string): { year: number; month: number; day: number } {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -33,33 +32,31 @@ export function calculateTargetDate(
   return toDateString(targetDate.getFullYear(), targetDate.getMonth() + 1, targetDate.getDate());
 }
 
-export function getAssetBreakdownByCategory(groupIdParam?: string, db: Db = getDb()) {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return [];
+/** 最新スナップショットの資産をassetType別に集計（Zaim銀行残高を加算） */
+export function getAssetBreakdownByCategory(db: Db = getDb()) {
+  const latest = getLatestSnapshot(db);
+  if (!latest) return [];
 
-  const latestHistory = db
-    .select()
-    .from(schema.assetHistory)
-    .where(eq(schema.assetHistory.groupId, groupId))
-    .orderBy(desc(schema.assetHistory.date))
-    .limit(1)
-    .get();
-
-  if (!latestHistory) {
-    return [];
-  }
-
-  const categories = db
-    .select()
-    .from(schema.assetHistoryCategories)
-    .where(eq(schema.assetHistoryCategories.assetHistoryId, latestHistory.id))
+  const rows = db
+    .select({
+      assetType: schema.rfHoldings.assetType,
+      amount: schema.rfHoldingValues.amount,
+    })
+    .from(schema.rfHoldingValues)
+    .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
     .all();
 
-  const zaimBank = getZaimDailyBankTotal(latestHistory.date, db);
-  const result = categories
-    .filter((c) => c.amount > 0)
-    .map((c) => ({ category: c.categoryName, amount: c.amount }));
+  const typeMap = new Map<string, number>();
+  for (const row of rows) {
+    typeMap.set(row.assetType, (typeMap.get(row.assetType) ?? 0) + row.amount);
+  }
 
+  const result = [...typeMap.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .filter((c) => c.amount > 0);
+
+  const zaimBank = getZaimDailyBankTotal(latest.date, db);
   if (zaimBank > 0) {
     result.push({ category: "銀行・現金", amount: zaimBank });
   }
@@ -67,221 +64,150 @@ export function getAssetBreakdownByCategory(groupIdParam?: string, db: Db = getD
   return result.sort((a, b) => b.amount - a.amount);
 }
 
-export function aggregateLiabilitiesByCategory(
-  holdings: Array<{
-    type: string;
-    liabilityCategory: string | null;
-    amount: number | null;
-  }>,
-) {
-  const breakdown: Record<string, number> = {};
-
-  for (const holding of holdings) {
-    if (holding.type === "liability" && holding.amount) {
-      const category = holding.liabilityCategory || "その他";
-      breakdown[category] = (breakdown[category] || 0) + holding.amount;
-    }
-  }
-
-  return Object.entries(breakdown)
-    .map(([category, amount]) => ({ category, amount }))
-    .sort((a, b) => b.amount - a.amount);
+/** robofolioは負債を管理しないため空配列を返す */
+export function getLiabilityBreakdownByCategory(_db: Db = getDb()) {
+  return [] as Array<{ category: string; amount: number }>;
 }
 
-export function getLiabilityBreakdownByCategory(groupIdParam?: string, db: Db = getDb()) {
-  const holdings = getHoldingsWithLatestValues(groupIdParam, db);
-  return aggregateLiabilitiesByCategory(holdings);
-}
-
-export function getAssetHistory(options?: { limit?: number; groupId?: string }, db: Db = getDb()) {
-  const groupId = resolveGroupId(db, options?.groupId);
-  if (!groupId) return [];
-
-  const query = db
-    .select()
-    .from(schema.assetHistory)
-    .where(eq(schema.assetHistory.groupId, groupId))
-    .orderBy(desc(schema.assetHistory.date));
-
-  if (options?.limit) {
-    return query.limit(options.limit).all();
-  }
-  return query.all();
-}
-
-export function getAssetHistoryWithCategories(
-  options?: { limit?: number; groupId?: string },
-  db: Db = getDb(),
-) {
-  const groupId = resolveGroupId(db, options?.groupId);
-  if (!groupId) return [];
-
-  const historyEntries = (() => {
-    const query = db
-      .select()
-      .from(schema.assetHistory)
-      .where(eq(schema.assetHistory.groupId, groupId))
-      .orderBy(desc(schema.assetHistory.date));
-    return options?.limit ? query.limit(options.limit).all() : query.all();
-  })();
-
-  return historyEntries.map((entry) => {
-    const cats = db
-      .select()
-      .from(schema.assetHistoryCategories)
-      .where(eq(schema.assetHistoryCategories.assetHistoryId, entry.id))
-      .all();
-
-    const categories: Record<string, number> = {};
-    for (const cat of cats) {
-      categories[cat.categoryName] = cat.amount;
-    }
-
-    const zaimBank = getZaimDailyBankTotal(entry.date, db);
-    if (zaimBank > 0) {
-      categories["銀行・現金"] = zaimBank;
-    }
-
-    return {
-      date: entry.date,
-      totalAssets: entry.totalAssets + zaimBank,
-      categories,
-    };
-  });
-}
-
-export function getLatestTotalAssets(groupIdParam?: string, db: Db = getDb()): number | null {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return null;
-
-  const latest = db
-    .select({ totalAssets: schema.assetHistory.totalAssets, date: schema.assetHistory.date })
-    .from(schema.assetHistory)
-    .where(eq(schema.assetHistory.groupId, groupId))
-    .orderBy(desc(schema.assetHistory.date))
-    .limit(1)
-    .get();
-
+/** 最新の総資産（証券 + Zaim銀行） */
+export function getLatestTotalAssets(db: Db = getDb()): number | null {
+  const latest = getLatestSnapshot(db);
   if (!latest) return null;
-  const zaimBank = getZaimDailyBankTotal(latest.date, db);
-  return latest.totalAssets + zaimBank;
-}
 
-export function getDailyAssetChange(groupIdParam?: string, db: Db = getDb()) {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return null;
-
-  const latest = db
-    .select({ totalAssets: schema.assetHistory.totalAssets, date: schema.assetHistory.date })
-    .from(schema.assetHistory)
-    .where(eq(schema.assetHistory.groupId, groupId))
-    .orderBy(desc(schema.assetHistory.date))
-    .limit(2)
+  const rows = db
+    .select({ amount: schema.rfHoldingValues.amount })
+    .from(schema.rfHoldingValues)
+    .where(eq(schema.rfHoldingValues.snapshotId, latest.id))
     .all();
 
-  if (latest.length < 2) {
-    return null;
-  }
-
-  const todayZaim = getZaimDailyBankTotal(latest[0].date, db);
-  const yesterdayZaim = getZaimDailyBankTotal(latest[1].date, db);
-  const today = latest[0].totalAssets + todayZaim;
-  const yesterday = latest[1].totalAssets + yesterdayZaim;
-
-  return { today, yesterday, change: today - yesterday };
+  const rfTotal = rows.reduce((sum, r) => sum + r.amount, 0);
+  const zaimBank = getZaimDailyBankTotal(latest.date, db);
+  return rfTotal + zaimBank;
 }
 
-export function calculateCategoryChanges(
-  latestCategories: Array<{ categoryName: string; amount: number }>,
-  previousCategories: Array<{ categoryName: string; amount: number }>,
-) {
-  const latestMap = new Map(latestCategories.map((c) => [c.categoryName, c.amount]));
-  const previousMap = new Map(previousCategories.map((c) => [c.categoryName, c.amount]));
-
-  const allCategoryNames = new Set([...latestMap.keys(), ...previousMap.keys()]);
-
-  return [...allCategoryNames]
-    .map((name) => ({
-      name,
-      current: latestMap.get(name) ?? 0,
-      previous: previousMap.get(name) ?? 0,
-      change: (latestMap.get(name) ?? 0) - (previousMap.get(name) ?? 0),
-    }))
-    .filter((cat) => cat.current > 0 || cat.previous > 0);
-}
-
+/** 前日比・週比・月比の変化を計算 */
 export function getCategoryChangesForPeriod(
   period: "daily" | "weekly" | "monthly",
-  groupIdParam?: string,
   db: Db = getDb(),
 ) {
-  const groupId = resolveGroupId(db, groupIdParam);
-  if (!groupId) return null;
+  const latestSnap = getLatestSnapshot(db);
+  if (!latestSnap) return null;
 
-  const latest = db
+  const targetDateStr = calculateTargetDate(latestSnap.date, period);
+
+  const prevSnap = db
     .select()
-    .from(schema.assetHistory)
-    .where(eq(schema.assetHistory.groupId, groupId))
-    .orderBy(desc(schema.assetHistory.date))
+    .from(schema.rfSnapshots)
+    .where(and(sql`${schema.rfSnapshots.date} <= ${targetDateStr}`))
+    .orderBy(desc(schema.rfSnapshots.date))
     .limit(1)
     .get();
 
-  if (!latest) {
-    return null;
-  }
+  if (!prevSnap || prevSnap.date === latestSnap.date) return null;
 
-  const targetDateStr = calculateTargetDate(latest.date, period);
+  const getTotal = (snapshotId: number, date: string) => {
+    const rows = db
+      .select({ amount: schema.rfHoldingValues.amount })
+      .from(schema.rfHoldingValues)
+      .where(eq(schema.rfHoldingValues.snapshotId, snapshotId))
+      .all();
+    const rf = rows.reduce((sum, r) => sum + r.amount, 0);
+    return rf + getZaimDailyBankTotal(date, db);
+  };
 
-  const previous = db
-    .select()
-    .from(schema.assetHistory)
-    .where(
-      and(
-        eq(schema.assetHistory.groupId, groupId),
-        sql`${schema.assetHistory.date} <= ${targetDateStr}`,
-      ),
-    )
-    .orderBy(desc(schema.assetHistory.date))
-    .limit(1)
-    .get();
+  const getCategories = (snapshotId: number) => {
+    const rows = db
+      .select({
+        assetType: schema.rfHoldings.assetType,
+        amount: schema.rfHoldingValues.amount,
+      })
+      .from(schema.rfHoldingValues)
+      .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+      .where(eq(schema.rfHoldingValues.snapshotId, snapshotId))
+      .all();
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      map.set(r.assetType, (map.get(r.assetType) ?? 0) + r.amount);
+    }
+    return map;
+  };
 
-  if (!previous || previous.date === latest.date) {
-    return null;
-  }
+  const currentTotal = getTotal(latestSnap.id, latestSnap.date);
+  const previousTotal = getTotal(prevSnap.id, prevSnap.date);
+  const latestCats = getCategories(latestSnap.id);
+  const previousCats = getCategories(prevSnap.id);
 
-  const latestCats = db
-    .select()
-    .from(schema.assetHistoryCategories)
-    .where(eq(schema.assetHistoryCategories.assetHistoryId, latest.id))
-    .all();
-  const previousCats = db
-    .select()
-    .from(schema.assetHistoryCategories)
-    .where(eq(schema.assetHistoryCategories.assetHistoryId, previous.id))
-    .all();
+  const latestZaim = getZaimDailyBankTotal(latestSnap.date, db);
+  const prevZaim = getZaimDailyBankTotal(prevSnap.date, db);
+  if (latestZaim > 0) latestCats.set("銀行・現金", latestZaim);
+  if (prevZaim > 0) previousCats.set("銀行・現金", prevZaim);
 
-  const latestZaim = getZaimDailyBankTotal(latest.date, db);
-  const previousZaim = getZaimDailyBankTotal(previous.date, db);
-
-  const latestCategories = [
-    ...latestCats,
-    ...(latestZaim > 0 ? [{ categoryName: "銀行・現金", amount: latestZaim }] : []),
-  ];
-  const previousCategories = [
-    ...previousCats,
-    ...(previousZaim > 0 ? [{ categoryName: "銀行・現金", amount: previousZaim }] : []),
-  ];
-
-  const categoryChanges = calculateCategoryChanges(latestCategories, previousCategories);
-  const currentTotal = latest.totalAssets + latestZaim;
-  const previousTotal = previous.totalAssets + previousZaim;
+  const allKeys = new Set([...latestCats.keys(), ...previousCats.keys()]);
+  const categories = [...allKeys]
+    .map((name) => ({
+      name,
+      current: latestCats.get(name) ?? 0,
+      previous: previousCats.get(name) ?? 0,
+      change: (latestCats.get(name) ?? 0) - (previousCats.get(name) ?? 0),
+    }))
+    .filter((c) => c.current > 0 || c.previous > 0);
 
   return {
-    categories: categoryChanges,
+    categories,
     total: {
       current: currentTotal,
       previous: previousTotal,
       change: currentTotal - previousTotal,
     },
   };
+}
+
+/** 日次資産推移（全スナップショット分） */
+export function getAssetHistoryWithCategories(
+  options?: { limit?: number },
+  db: Db = getDb(),
+) {
+  const query = db
+    .select()
+    .from(schema.rfSnapshots)
+    .orderBy(desc(schema.rfSnapshots.date));
+
+  const snapshots = options?.limit ? query.limit(options.limit).all() : query.all();
+
+  return snapshots.map((snap) => {
+    const rows = db
+      .select({
+        assetType: schema.rfHoldings.assetType,
+        amount: schema.rfHoldingValues.amount,
+      })
+      .from(schema.rfHoldingValues)
+      .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+      .where(eq(schema.rfHoldingValues.snapshotId, snap.id))
+      .all();
+
+    const categories: Record<string, number> = {};
+    let rfTotal = 0;
+    for (const r of rows) {
+      categories[r.assetType] = (categories[r.assetType] ?? 0) + r.amount;
+      rfTotal += r.amount;
+    }
+
+    const zaimBank = getZaimDailyBankTotal(snap.date, db);
+    if (zaimBank > 0) {
+      categories["銀行・現金"] = zaimBank;
+    }
+
+    return {
+      date: snap.date,
+      totalAssets: rfTotal + zaimBank,
+      categories,
+    };
+  });
+}
+
+/** 前日比の資産変化 */
+export function getDailyAssetChange(db: Db = getDb()) {
+  const result = getCategoryChangesForPeriod("daily", db);
+  if (!result) return null;
+  return { today: result.total.current, yesterday: result.total.previous, change: result.total.change };
 }

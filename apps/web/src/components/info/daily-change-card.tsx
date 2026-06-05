@@ -5,11 +5,10 @@ import { DailyChangeCardClient } from "./daily-change-card.client";
 
 interface DailyChangeCardProps {
   className?: string;
-  groupId?: string;
 }
 
-export function DailyChangeCard({ className, groupId }: DailyChangeCardProps) {
-  const holdings = getHoldingsWithDailyChange(groupId);
+export function DailyChangeCard({ className }: DailyChangeCardProps) {
+  const holdings = getHoldingsWithDailyChange();
 
   if (holdings.length === 0) {
     return <EmptyState icon={ArrowUpDown} title="前日比ランキング" />;
@@ -18,8 +17,8 @@ export function DailyChangeCard({ className, groupId }: DailyChangeCardProps) {
   const holdingsData = holdings.map((h) => ({
     name: h.name,
     code: h.code,
-    categoryName: h.categoryName,
-    accountName: h.accountName,
+    categoryName: h.assetType,
+    accountName: h.brokerName,
     dailyChange: h.dailyChange,
   }));
 

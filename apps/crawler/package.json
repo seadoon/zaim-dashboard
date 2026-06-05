@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:scrape": "DEBUG=true SKIP_REFRESH=true tsx src/index.ts",
+    "dev:scrape": "DEBUG=true tsx src/index.ts",
+    "dev:discover": "DEBUG=true tsx src/scrapers/robofolio-discovery.ts",
     "start": "tsx src/index.ts",
     "notify": "tsx src/notify.ts",
     "typecheck": "tsc --noEmit"

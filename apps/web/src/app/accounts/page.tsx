@@ -1,74 +1,50 @@
 import type { Metadata } from "next";
-import { getAccountsGroupedByCategory } from "@moneyforward-daily-action/db";
-import { mfUrls } from "@moneyforward-daily-action/meta/urls";
-import { AccountCard } from "../../components/info/account-card";
+import { getRfBrokers } from "@moneyforward-daily-action/db";
+import { getHoldingsWithLatestValues } from "@moneyforward-daily-action/db";
+import { rfUrls } from "@moneyforward-daily-action/meta/urls";
 import { PageLayout } from "../../components/layout/page-layout";
-import { Badge } from "../../components/ui/badge";
+import { AmountDisplay } from "../../components/ui/amount-display";
+import { Card, CardHeader, CardTitle } from "../../components/ui/card";
 
 export const metadata: Metadata = {
-  title: "連携サービス一覧",
+  title: "証券口座",
 };
 
-interface GroupedAccounts {
-  categoryName: string;
-  accounts: {
-    id: number;
-    mfId: string;
-    name: string;
-    type: string;
-    status: string;
-    lastUpdated: string | null;
-    totalAssets: number;
-  }[];
-}
-
-function AccountStatusBadges({ groupedAccounts }: { groupedAccounts: GroupedAccounts[] }) {
-  const allAccounts = groupedAccounts.flatMap((group) => group.accounts);
-  const autoAccounts = allAccounts.filter((a) => a.type !== "手動");
-  const okCount = autoAccounts.filter((a) => a.status === "ok").length;
-  const errorCount = autoAccounts.filter((a) => a.status === "error").length;
-
-  return (
-    <>
-      <Badge variant="success">正常: {okCount}件</Badge>
-      <Badge variant="destructive">エラー: {errorCount}件</Badge>
-    </>
-  );
-}
-
 export default function AccountsPage() {
-  const groupedAccounts = getAccountsGroupedByCategory();
+  const brokers = getRfBrokers();
+  const holdings = getHoldingsWithLatestValues();
+
+  const brokerTotals = new Map<number, { name: string; total: number; count: number }>();
+  for (const b of brokers) {
+    brokerTotals.set(b.id, { name: b.name, total: 0, count: 0 });
+  }
+  for (const h of holdings) {
+    const broker = brokers.find((b) => b.name === h.brokerName);
+    if (broker) {
+      const prev = brokerTotals.get(broker.id)!;
+      brokerTotals.set(broker.id, { ...prev, total: prev.total + h.amount, count: prev.count + 1 });
+    }
+  }
 
   return (
-    <PageLayout
-      title="連携サービス一覧"
-      href={mfUrls.accounts}
-      options={<AccountStatusBadges groupedAccounts={groupedAccounts} />}
-    >
-      {groupedAccounts.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">連携サービスがありません。</div>
+    <PageLayout title="証券口座" href={rfUrls.portfolio}>
+      {brokers.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">証券口座データがありません。</div>
       ) : (
-        <div className="space-y-8">
-          {groupedAccounts.map((group) => (
-            <div key={group.categoryName} className="space-y-3">
-              <h2 className="text-lg font-semibold text-foreground border-b pb-2">
-                {group.categoryName}
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {group.accounts.map((account) => (
-                  <AccountCard
-                    key={account.id}
-                    mfId={account.mfId}
-                    name={account.name}
-                    type={account.type}
-                    status={account.status}
-                    lastUpdated={account.lastUpdated}
-                    totalAssets={account.totalAssets}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[...brokerTotals.values()]
+            .sort((a, b) => b.total - a.total)
+            .map((b) => (
+              <Card key={b.name}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{b.name}</CardTitle>
+                    <AmountDisplay amount={b.total} size="sm" weight="bold" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{b.count}銘柄</p>
+                </CardHeader>
+              </Card>
+            ))}
         </div>
       )}
     </PageLayout>

@@ -1,49 +1,20 @@
-import { getAccountByMfId } from "@moneyforward-daily-action/db";
-import { getLatestTotalAssets } from "@moneyforward-daily-action/db";
-import { getHoldingsByAccountId, getHoldingsWithLatestValues } from "@moneyforward-daily-action/db";
-import type { LucideIcon } from "lucide-react";
-import { PiggyBankIcon, LandmarkIcon } from "lucide-react";
+import { getHoldingsWithLatestValues, getLatestTotalAssets } from "@moneyforward-daily-action/db";
+import { PiggyBankIcon } from "lucide-react";
 import { AmountDisplay } from "../ui/amount-display";
 import { Card, CardHeader, CardTitle } from "../ui/card";
 import { EmptyState } from "../ui/empty-state";
 import { HoldingsTableClient } from "./holdings-table.client";
 
-interface HoldingsTableProps {
-  type: "asset" | "liability";
-  icon?: LucideIcon;
-  mfId?: string;
-  groupId?: string;
-}
+export function HoldingsTable() {
+  const allHoldings = getHoldingsWithLatestValues();
 
-const CONFIG = {
-  asset: { title: "保有資産", icon: PiggyBankIcon },
-  liability: { title: "負債", icon: LandmarkIcon },
-} as const;
-
-export function HoldingsTable({ type, icon, mfId, groupId }: HoldingsTableProps) {
-  const account = mfId ? getAccountByMfId(mfId, groupId) : null;
-  const allHoldings = account
-    ? getHoldingsByAccountId(account.id, groupId)
-    : getHoldingsWithLatestValues(groupId);
-  const holdings = allHoldings.filter((h) => h.type === type && h.amount);
-
-  const config = CONFIG[type];
-  const Icon = icon ?? config.icon;
-
-  if (holdings.length === 0) {
-    if (mfId) return null;
-    return <EmptyState icon={Icon} title={config.title} />;
+  if (allHoldings.length === 0) {
+    return <EmptyState icon={PiggyBankIcon} title="保有資産" />;
   }
 
-  const total = (() => {
-    if (mfId) return holdings.reduce((sum, h) => sum + (h.amount || 0), 0);
-    if (type === "asset") {
-      return getLatestTotalAssets(groupId) ?? holdings.reduce((sum, h) => sum + (h.amount || 0), 0);
-    }
-    return holdings.reduce((sum, h) => sum + (h.amount || 0), 0);
-  })();
+  const total = getLatestTotalAssets() ?? allHoldings.reduce((sum, h) => sum + h.amount, 0);
 
-  const grouped = holdings.reduce<
+  const grouped = allHoldings.reduce<
     Record<
       string,
       Array<{
@@ -59,23 +30,20 @@ export function HoldingsTable({ type, icon, mfId, groupId }: HoldingsTableProps)
         unitPrice: number | null;
       }>
     >
-  >((acc, holding) => {
-    const category =
-      holding.type === "liability"
-        ? holding.liabilityCategory || "その他"
-        : holding.categoryName || "その他";
+  >((acc, h) => {
+    const category = h.assetType;
     if (!acc[category]) acc[category] = [];
     acc[category].push({
-      id: holding.id,
-      name: holding.name,
-      accountName: holding.accountName,
-      amount: holding.amount,
-      unrealizedGain: holding.unrealizedGain,
-      unrealizedGainPct: holding.unrealizedGainPct,
-      dailyChange: holding.dailyChange,
-      avgCostPrice: holding.avgCostPrice,
-      quantity: holding.quantity,
-      unitPrice: holding.unitPrice,
+      id: h.id,
+      name: h.name,
+      accountName: h.brokerName,
+      amount: h.amount,
+      unrealizedGain: h.unrealizedGain,
+      unrealizedGainPct: h.unrealizedGainPct,
+      dailyChange: h.dailyChange,
+      avgCostPrice: h.avgCostPrice,
+      quantity: h.quantity,
+      unitPrice: h.unitPrice,
     });
     return acc;
   }, {});
@@ -92,11 +60,11 @@ export function HoldingsTable({ type, icon, mfId, groupId }: HoldingsTableProps)
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle icon={Icon}>{config.title}</CardTitle>
+          <CardTitle icon={PiggyBankIcon}>保有資産</CardTitle>
           <AmountDisplay amount={total} size="lg" weight="bold" />
         </div>
       </CardHeader>
-      <HoldingsTableClient categories={categories} hideAccountName={!!mfId} />
+      <HoldingsTableClient categories={categories} hideAccountName={false} />
     </Card>
   );
 }
