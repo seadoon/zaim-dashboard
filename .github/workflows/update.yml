@@ -2,8 +2,10 @@ name: Daily Update
 
 on:
   schedule:
-    # JST 7:00 → UTC 22:00 (前日) — Zaim のみ
+    # JST 7:00 → UTC 22:00 (前日)
     - cron: "0 22 * * *"
+    # JST 15:30 → UTC 6:30
+    - cron: "30 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,7 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
-      run-rf: ${{ steps.check.outputs.run-rf }}
     steps:
       - id: check
         env:
@@ -27,12 +28,6 @@ jobs:
           RUN_TASK: ${{ vars.RUN_TASK }}
         run: |
           echo "should-run=${{ env.ZAIM_ID != '' && env.ROBOFOLIO_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
-          # Robofolio は手動実行のみ（robofolioの更新ボタンを手動で押した後に実行）
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "run-rf=true" >> $GITHUB_OUTPUT
-          else
-            echo "run-rf=false" >> $GITHUB_OUTPUT
-          fi
 
   zaim:
     needs: check
@@ -86,34 +81,9 @@ jobs:
           aws s3 cp data/zaim.db s3://${{ vars.R2_BUCKET_NAME }}/zaim.db \
             --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
-  notify:
-    needs: [check, zaim]
-    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-rf == 'false'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-node
-
-      - name: Download DB from R2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-        run: |
-          mkdir -p data
-          aws s3 cp s3://${{ vars.R2_BUCKET_NAME }}/zaim.db data/zaim.db \
-            --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-
-      - run: pnpm --filter @zaim-dashboard/crawler notify
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
-          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
-
   robofolio:
     needs: [check, zaim]
-    if: needs.check.outputs.should-run == 'true' && needs.check.outputs.run-rf == 'true'
+    if: needs.check.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
