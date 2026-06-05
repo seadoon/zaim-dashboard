@@ -19,7 +19,7 @@ export function DailyChangeCard({ className }: DailyChangeCardProps) {
     code: h.code,
     categoryName: h.assetType,
     accountName: h.brokerName,
-    dailyChange: h.dailyChange,
+    dailyChange: h.dailyChange ?? 0,
   }));
 
   return (
