@@ -6,7 +6,7 @@ export const rfUrls = {
   /** ログイン */
   login: `${RF_BASE_URL}/login`,
   /** 保有銘柄一覧 */
-  portfolio: `${RF_BASE_URL}/portfolio`,
+  portfolio: `${RF_BASE_URL}/mypage/account/`,
   /** 資産推移 */
-  history: `${RF_BASE_URL}/chart`,
+  history: `${RF_BASE_URL}/mypage/`,
 } as const;

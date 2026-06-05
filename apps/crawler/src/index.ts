@@ -10,7 +10,7 @@ import {
   getRfSecuritiesTotalByBroker,
   getRfSecuritiesTotalByType,
 } from "@moneyforward-daily-action/db";
-import { saveRobofolioData } from "@moneyforward-daily-action/db/repository/save-scraped-data";
+import { saveRobofolioData } from "@moneyforward-daily-action/db";
 import path from "node:path";
 import { chromium } from "playwright";
 import { loginToRobofolio } from "./auth/robofolio-login.js";
