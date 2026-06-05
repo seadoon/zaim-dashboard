@@ -24,21 +24,14 @@ export function UnrealizedGainCard({ className }: UnrealizedGainCardProps) {
     categoryName: h.assetType,
   }));
 
-  const institutionTotals = new Map<string, number>();
-  const institutionCategoryTotals = new Map<string, number>();
-
-  for (const h of withGain) {
-    const broker = h.brokerName;
-    institutionTotals.set(broker, (institutionTotals.get(broker) ?? 0) + h.amount);
-    const key = `${broker}__${h.assetType}`;
-    institutionCategoryTotals.set(key, (institutionCategoryTotals.get(key) ?? 0) + h.amount);
-  }
+  const brokerNames = [...new Set(withGain.map((h) => h.brokerName))];
+  const filterOptions = brokerNames.map((name) => ({ value: name, label: name }));
 
   return (
     <div className={className}>
       <UnrealizedGainCardClient
         holdings={holdingsData}
-        institutionTotals={[...institutionTotals.entries()].map(([name, total]) => ({ name, total }))}
+        filterOptions={filterOptions}
       />
     </div>
   );
