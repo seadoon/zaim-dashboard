@@ -40,56 +40,33 @@ export async function loginToRobofolio(page: Page): Promise<void> {
   );
   log(`Input fields on login page: ${JSON.stringify(inputs)}`);
 
-  // メールアドレス/ログインID入力
-  // 実際のフィールド: input[name="login_id"], input[id="username"]
-  const emailSelector = [
-    'input[name="login_id"]',
-    'input[id="username"]',
-    'input[type="email"]',
-    'input[name="email"]',
-    'input[name="user[email]"]',
-    'input[id="email"]',
-    'input[placeholder*="メール"]',
-    'input[placeholder*="email"]',
-    'input[autocomplete="email"]',
-    'input[autocomplete="username"]',
-  ].join(", ");
+  // "Googleでログイン" ボタンを直接クリック
+  // (ページのHTMLでは button.google.btn-social または button[data-id="g"])
+  const googleBtn = page.locator('button[data-id="g"], button.google').first();
+  const hasGoogleBtn = await googleBtn.count() > 0;
 
-  const passwordSelector = [
-    'input[type="password"]',
-    'input[name="password"]',
-    'input[name="user[password]"]',
-    'input[id="password"]',
-  ].join(", ");
-
-  log("Filling email field...");
-  const emailInput = page.locator(emailSelector).first();
-  const emailVisible = await emailInput.isVisible().catch(() => false);
-  if (!emailVisible) {
-    warn(`Email field not found with selector. Available inputs: ${JSON.stringify(inputs)}`);
-    await saveDebug(page, "login-no-email-field");
-    throw new Error("Email input field not found on login page");
-  }
-  await emailInput.fill(email);
-
-  log("Filling password field...");
-  await page.fill(passwordSelector, password);
-
-  log("Submitting login form...");
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
-    page.click('button[type="submit"]'),
-  ]);
-
-  let currentUrl = page.url();
-  log(`After form submit, URL: ${currentUrl}`);
-
-  // Google OAuth にリダイレクトされた場合はそのフローを処理
-  if (currentUrl.includes("accounts.google.com")) {
-    log("Redirected to Google OAuth, proceeding with Google sign-in...");
+  if (hasGoogleBtn) {
+    log("Clicking Google login button...");
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
+      googleBtn.click(),
+    ]);
+    log(`Navigated to: ${page.url()}`);
     await handleGoogleAuth(page, email, password);
-    currentUrl = page.url();
+  } else {
+    // フォールバック: メール/パスワードでの直接ログイン
+    log("Google button not found, trying email/password form...");
+    const emailInput = page.locator('input[name="login_id"], input[id="username"], input[type="email"]').first();
+    await emailInput.fill(email);
+    await page.fill('input[type="password"]', password);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30000 }),
+      page.locator('a[href="javascript:form.submit()"], button[type="submit"]').first().click(),
+    ]);
   }
+
+  const currentUrl = page.url();
+  log(`Final URL after login: ${currentUrl}`);
 
   if (currentUrl.includes("/login") || currentUrl.includes("/sign_in") || currentUrl.includes("accounts.google.com")) {
     await saveDebug(page, "login-failed");
