@@ -66,10 +66,22 @@ export function initDb() {
       sqlite.exec(
         `CREATE TABLE "__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric)`,
       );
-      // created_at = journal 'when' for 0000_zaim_init, so Drizzle skips it
+      // Bootstrap to the highest already-applied migration so Drizzle skips them.
+      // Journal when values: 0000=1770121677895, 0001=1778600833565, 0002=1778600833566,
+      //                      0003=1778600833567, 0004=1778600833570
+      // Check which tables/columns already exist to determine baseline.
+      const hasBankHistory = sqlite
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='zaim_daily_bank_totals'")
+        .get();
+      const hasCountCol = sqlite
+        .prepare("SELECT 1 FROM pragma_table_info('transactions') WHERE name='count'")
+        .get();
+      let baselineWhen = 1770121677895; // 0000
+      if (hasBankHistory) baselineWhen = 1778600833566; // 0002
+      if (hasBankHistory && hasCountCol) baselineWhen = 1778600833567; // 0003
       sqlite
         .prepare(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (?, ?)`)
-        .run("bootstrap-0000-zaim-init", 1770121677895);
+        .run("bootstrap-pre-robofolio", baselineWhen);
     }
   }
 
