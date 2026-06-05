@@ -51,9 +51,9 @@ export type Db = ReturnType<typeof getDb>;
 export function initDb() {
   const db = getDb();
 
-  // If 'transactions' exists but '__drizzle_migrations' doesn't, the DB was
-  // created by the old Python crawler. Pre-insert a baseline migration record
-  // so Drizzle skips 0000_zaim_init.sql (which would fail with "table already exists").
+  // Ensure the migrations table exists and reflects the actual state of the DB.
+  // Journal when values: 0000=1770121677895, 0001=1778600833565, 0002=1778600833566,
+  //                      0003=1778600833567, 0004=1778600833570
   const sqlite = _sqlite!;
   const hasMigrationsTable = sqlite
     .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'")
@@ -66,22 +66,35 @@ export function initDb() {
       sqlite.exec(
         `CREATE TABLE "__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric)`,
       );
-      // Bootstrap to the highest already-applied migration so Drizzle skips them.
-      // Journal when values: 0000=1770121677895, 0001=1778600833565, 0002=1778600833566,
-      //                      0003=1778600833567, 0004=1778600833570
-      // Check which tables/columns already exist to determine baseline.
-      const hasBankHistory = sqlite
-        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='zaim_daily_bank_totals'")
-        .get();
+    }
+  }
+  // Always catch up: if zaim_daily_bank_totals already exists in the DB but the
+  // migrations table doesn't record it as applied, insert a catch-up entry so
+  // Drizzle doesn't try to re-create it. This handles DBs migrated by other tools
+  // or prior bootstrap failures that left the table in a partially-tracked state.
+  const migrationsTableExists = sqlite
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'")
+    .get();
+  if (migrationsTableExists) {
+    const lastApplied = (sqlite
+      .prepare(`SELECT created_at FROM "__drizzle_migrations" ORDER BY created_at DESC LIMIT 1`)
+      .get() as { created_at: number } | undefined)?.created_at ?? 0;
+    const hasBankHistory = sqlite
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='zaim_daily_bank_totals'")
+      .get();
+    if (hasBankHistory && lastApplied < 1778600833566) {
       const hasCountCol = sqlite
         .prepare("SELECT 1 FROM pragma_table_info('transactions') WHERE name='count'")
         .get();
-      let baselineWhen = 1770121677895; // 0000
-      if (hasBankHistory) baselineWhen = 1778600833566; // 0002
-      if (hasBankHistory && hasCountCol) baselineWhen = 1778600833567; // 0003
+      const catchUpWhen = hasCountCol ? 1778600833567 : 1778600833566;
       sqlite
         .prepare(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (?, ?)`)
-        .run("bootstrap-pre-robofolio", baselineWhen);
+        .run("bootstrap-catch-up", catchUpWhen);
+    } else if (!hasBankHistory && lastApplied === 0) {
+      // Completely fresh DB with transactions table: bootstrap to 0000
+      sqlite
+        .prepare(`INSERT INTO "__drizzle_migrations" (hash, created_at) VALUES (?, ?)`)
+        .run("bootstrap-pre-robofolio", 1770121677895);
     }
   }
 
