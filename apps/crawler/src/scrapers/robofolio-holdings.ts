@@ -43,9 +43,11 @@ export async function scrapeHoldings(page: Page): Promise<RfHoldingInput[]> {
   await page.goto(rfUrls.portfolio, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForLoadState("networkidle").catch(() => {});
 
-  // デバッグ: スクリーンショットとHTMLダンプ
+  // デバッグ: スクリーンショットとHTMLダンプ（常に保存）
+  const { writeFileSync: wfs, mkdirSync: mds } = await import("node:fs");
+  mds("debug", { recursive: true });
   await page.screenshot({ path: "debug/portfolio.png", fullPage: true }).catch(() => {});
-  debug("Portfolio page screenshot saved");
+  wfs("debug/portfolio.html", await page.content().catch(() => ""));
 
   const holdings: RfHoldingInput[] = [];
 
@@ -66,12 +68,6 @@ export async function scrapeHoldings(page: Page): Promise<RfHoldingInput[]> {
 
   if (holdings.length === 0) {
     warn("No holdings found. The page structure may have changed.");
-    // HTMLをダンプして構造を確認できるようにする
-    const html = await page.content();
-    const { writeFileSync, mkdirSync } = await import("node:fs");
-    mkdirSync("debug", { recursive: true });
-    writeFileSync("debug/portfolio.html", html);
-    log("HTML dumped to debug/portfolio.html for inspection");
   }
 
   log(`Scraped ${holdings.length} holdings`);
