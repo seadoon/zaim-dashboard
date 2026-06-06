@@ -56,6 +56,29 @@ async function main() {
     await page.waitForLoadState("networkidle").catch(() => {});
     await dumpPage(page, "history");
 
+    // チャートAPIのリクエストをキャプチャ
+    info("Intercepting API requests on history page...");
+    const apiRequests: string[] = [];
+    page.on("request", (req) => {
+      const url = req.url();
+      if (req.resourceType() === "xhr" || req.resourceType() === "fetch") {
+        apiRequests.push(`${req.method()} ${url}`);
+        info(`  API: ${req.method()} ${url}`);
+      }
+    });
+    // チャートデータ読み込み待ち
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await new Promise((r) => setTimeout(r, 3000));
+    writeFileSync("debug/api-requests.txt", apiRequests.join("\n"));
+    info(`Captured ${apiRequests.length} API requests`);
+
+    info("Navigating to profit/weekly page...");
+    await page.goto(`${rfUrls.history}profit/weekly`, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await new Promise((r) => setTimeout(r, 3000));
+    await dumpPage(page, "profit-weekly");
+
     info("=== Discovery complete. Check debug/ directory. ===");
   } finally {
     await browser.close();
