@@ -19,7 +19,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { PageLayout } from "../../components/layout/page-layout";
 import { AmountDisplay } from "../../components/ui/amount-display";
-import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
+import { Card, CardContent } from "../../components/ui/card";
 
 export const metadata: Metadata = {
   title: "連携サービス",
@@ -58,72 +58,76 @@ export default function AccountsPage() {
   }
   const sortedBrokers = [...brokerTotals.values()].sort((a, b) => b.total - a.total);
 
+  const hasData = zaimCategories.length > 0 || sortedBrokers.length > 0;
+
   return (
     <PageLayout title="連携サービス">
-      {/* Zaim セクション */}
-      {zaimCategories.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">Zaim</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {zaimCategories.map((cat) => {
-              const Icon = getCategoryIcon(cat.category);
-              const total = cat.accounts.reduce((s, a) => s + a.balance, 0);
-              return (
-                <Card key={cat.category}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle icon={Icon}>{cat.category}</CardTitle>
-                      <AmountDisplay amount={total} size="sm" weight="bold" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">{cat.accounts.length}件</p>
-                  </CardHeader>
-                  {cat.accounts.length > 1 && (
-                    <CardContent>
-                      <ul className="space-y-1.5">
-                        {cat.accounts.map((a) => (
-                          <li key={a.name} className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground truncate pr-2">{a.name}</span>
-                            <AmountDisplay amount={a.balance} size="sm" />
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* 証券口座 セクション */}
-      {sortedBrokers.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
-            証券口座
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              (ロボフォリオ)
-            </span>
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sortedBrokers.map((b) => (
-              <Card key={b.name} href={rfUrls.portfolio} target="_blank">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle icon={Landmark}>{b.name}</CardTitle>
-                    <AmountDisplay amount={b.total} size="sm" weight="bold" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">{b.count}銘柄</p>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {zaimCategories.length === 0 && sortedBrokers.length === 0 && (
+      {!hasData ? (
         <div className="text-center py-12 text-muted-foreground">
           連携サービスのデータがありません。
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {zaimCategories.map((cat) => {
+            const Icon = getCategoryIcon(cat.category);
+            const total = cat.accounts.reduce((s, a) => s + a.balance, 0);
+            return (
+              <section key={cat.category} className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <Icon className="h-5 w-5 text-primary shrink-0" />
+                    {cat.category}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {cat.accounts.length}件
+                    </span>
+                  </h2>
+                  <AmountDisplay amount={total} size="sm" weight="bold" />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {cat.accounts.map((a) => (
+                    <Card key={a.name}>
+                      <CardContent className="pt-4 pb-4">
+                        <p className="font-medium text-foreground mb-3 text-sm leading-snug line-clamp-2">
+                          {a.name}
+                        </p>
+                        <AmountDisplay amount={a.balance} size="xl" weight="bold" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+
+          {sortedBrokers.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Landmark className="h-5 w-5 text-primary shrink-0" />
+                  証券口座
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {sortedBrokers.length}件
+                  </span>
+                </h2>
+                <AmountDisplay
+                  amount={sortedBrokers.reduce((s, b) => s + b.total, 0)}
+                  size="sm"
+                  weight="bold"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {sortedBrokers.map((b) => (
+                  <Card key={b.name} href={rfUrls.portfolio} target="_blank">
+                    <CardContent className="pt-4 pb-4">
+                      <p className="font-medium text-foreground mb-3 text-sm">{b.name}</p>
+                      <AmountDisplay amount={b.total} size="xl" weight="bold" />
+                      <p className="text-xs text-muted-foreground mt-1">{b.count}銘柄</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </PageLayout>
