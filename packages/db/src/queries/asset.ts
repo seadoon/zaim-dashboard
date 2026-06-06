@@ -1,4 +1,4 @@
-import { desc, eq, sql, and } from "drizzle-orm";
+import { desc, eq, sql, and, notInArray } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { getZaimDailyBankTotal, getZaimPointTotal } from "./zaim";
 import { getLatestSnapshot } from "./holding";
@@ -178,14 +178,16 @@ export function getAssetHistoryWithCategories(
   options?: { limit?: number },
   db: Db = getDb(),
 ) {
-  const query = db
+  // Source 1: rf_snapshots (daily scraper — per-holding detail)
+  const snapshots = db
     .select()
     .from(schema.rfSnapshots)
-    .orderBy(desc(schema.rfSnapshots.date));
+    .orderBy(desc(schema.rfSnapshots.date))
+    .all();
 
-  const snapshots = options?.limit ? query.limit(options.limit).all() : query.all();
+  const snapshotDates = new Set(snapshots.map((s) => s.date));
 
-  return snapshots.map((snap) => {
+  const snapshotResults = snapshots.map((snap) => {
     const rows = db
       .select({
         assetType: schema.rfHoldings.assetType,
@@ -200,24 +202,65 @@ export function getAssetHistoryWithCategories(
     let rfTotal = 0;
     for (const r of rows) {
       const cat = consolidateAssetType(r.assetType);
-      if (cat !== "その他") {
-        categories[cat] = (categories[cat] ?? 0) + r.amount;
-      }
+      if (cat !== "その他") categories[cat] = (categories[cat] ?? 0) + r.amount;
       rfTotal += r.amount;
     }
 
     const zaimBank = getZaimDailyBankTotal(snap.date, db);
     if (zaimBank > 0) categories["現金"] = zaimBank;
-
     const zaimPoints = getZaimPointTotal(db);
     if (zaimPoints > 0) categories["ポイント"] = zaimPoints;
 
-    return {
-      date: snap.date,
-      totalAssets: rfTotal + zaimBank,
-      categories,
-    };
+    return { date: snap.date, totalAssets: rfTotal + zaimBank, categories };
   });
+
+  // Source 2: rf_asset_history (backfill — aggregated by asset type)
+  const historyQuery = snapshotDates.size > 0
+    ? db.select().from(schema.rfAssetHistory)
+        .where(notInArray(schema.rfAssetHistory.date, [...snapshotDates]))
+        .orderBy(desc(schema.rfAssetHistory.date))
+        .all()
+    : db.select().from(schema.rfAssetHistory)
+        .orderBy(desc(schema.rfAssetHistory.date))
+        .all();
+
+  const historyByDate = new Map<string, { categories: Record<string, number>; rfTotal: number }>();
+  for (const row of historyQuery) {
+    if (!historyByDate.has(row.date)) historyByDate.set(row.date, { categories: {}, rfTotal: 0 });
+    const entry = historyByDate.get(row.date)!;
+    const cat = consolidateAssetType(row.assetType);
+    if (cat !== "その他") entry.categories[cat] = (entry.categories[cat] ?? 0) + row.amount;
+    entry.rfTotal += row.amount;
+  }
+
+  const zaimPoints = getZaimPointTotal(db);
+  const historyResults = [...historyByDate.entries()].map(([date, { categories, rfTotal }]) => {
+    const zaimBank = getZaimDailyBankTotal(date, db);
+    if (zaimBank > 0) categories["現金"] = zaimBank;
+    if (zaimPoints > 0) categories["ポイント"] = zaimPoints;
+    return { date, totalAssets: rfTotal + zaimBank, categories };
+  });
+
+  const all = [...snapshotResults, ...historyResults].sort((a, b) =>
+    b.date.localeCompare(a.date),
+  );
+  return options?.limit ? all.slice(0, options.limit) : all;
+}
+
+export function upsertAssetHistory(
+  entries: Array<{ date: string; assetType: string; amount: number }>,
+  db: Db = getDb(),
+) {
+  const now = new Date().toISOString();
+  for (const e of entries) {
+    db.insert(schema.rfAssetHistory)
+      .values({ date: e.date, assetType: e.assetType, amount: e.amount, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [schema.rfAssetHistory.date, schema.rfAssetHistory.assetType],
+        set: { amount: e.amount, updatedAt: now },
+      })
+      .run();
+  }
 }
 
 /** 前日比の資産変化 */

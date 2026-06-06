@@ -15,6 +15,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { loginToRobofolio } from "./auth/robofolio-login.js";
 import { scrapeHoldings } from "./scrapers/robofolio-holdings.js";
+import { backfillAssetHistory } from "./scrapers/robofolio-backfill.js";
 import { sendDiscordNotification, sendDiscordErrorNotification } from "./discord.js";
 import { log, info, error, section } from "./logger.js";
 
@@ -41,6 +42,9 @@ async function main() {
     section("Save");
     const today = new Date().toISOString().slice(0, 10);
     saveRobofolioData(db, holdings, today);
+
+    section("Backfill");
+    await backfillAssetHistory(page, db);
     log("Data saved to DB");
 
     section("Notification");

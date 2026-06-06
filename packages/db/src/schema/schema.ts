@@ -111,6 +111,20 @@ export const rfHoldingValues = sqliteTable(
   ],
 );
 
+// 資産タイプ別日次履歴（ロボフォリオのポートフォリオチャートから取得した集計データ）
+export const rfAssetHistory = sqliteTable(
+  "rf_asset_history",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    date: text("date").notNull(),
+    assetType: text("asset_type").notNull(),
+    amount: integer("amount").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("rf_asset_history_date_type_idx").on(table.date, table.assetType)],
+);
+
 // ============================================================================
 // リレーション定義
 // ============================================================================
