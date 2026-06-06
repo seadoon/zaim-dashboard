@@ -8,6 +8,13 @@ export function getZaimBankTotal(db: Db = getDb()): number {
   return result?.total ?? 0;
 }
 
+export function getZaimPointTotal(db: Db = getDb()): number {
+  const result = db.get<{ total: number }>(
+    sql`SELECT COALESCE(SUM(balance), 0) as total FROM zaim_account_balances WHERE category = 'ポイント'`,
+  );
+  return result?.total ?? 0;
+}
+
 export function getZaimBankItems(db: Db = getDb()): Array<{ name: string; balance: number }> {
   return db.all<{ name: string; balance: number }>(
     sql`SELECT account_name as name, balance FROM zaim_account_balances WHERE category = '銀行' OR category IS NULL ORDER BY balance DESC`,

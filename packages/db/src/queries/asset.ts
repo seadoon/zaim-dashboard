@@ -1,7 +1,16 @@
 import { desc, eq, sql, and } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
-import { getZaimDailyBankTotal } from "./zaim";
+import { getZaimDailyBankTotal, getZaimPointTotal } from "./zaim";
 import { getLatestSnapshot } from "./holding";
+
+const STOCK_ASSET_TYPES = new Set(["株式", "株式(NISA)", "外国株", "外国株(NISA)", "信用"]);
+const FUND_ASSET_TYPES = new Set(["投資信託", "投資信託(NISA)"]);
+
+function consolidateAssetType(assetType: string): string {
+  if (STOCK_ASSET_TYPES.has(assetType)) return "個別株";
+  if (FUND_ASSET_TYPES.has(assetType)) return "投資信託";
+  return "その他";
+}
 
 export function parseDateString(dateStr: string): { year: number; month: number; day: number } {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -32,7 +41,7 @@ export function calculateTargetDate(
   return toDateString(targetDate.getFullYear(), targetDate.getMonth() + 1, targetDate.getDate());
 }
 
-/** 最新スナップショットの資産をassetType別に集計（Zaim銀行残高を加算） */
+/** 最新スナップショットの資産を4カテゴリ（現金・個別株・投資信託・ポイント）に集計 */
 export function getAssetBreakdownByCategory(db: Db = getDb()) {
   const latest = getLatestSnapshot(db);
   if (!latest) return [];
@@ -49,17 +58,19 @@ export function getAssetBreakdownByCategory(db: Db = getDb()) {
 
   const typeMap = new Map<string, number>();
   for (const row of rows) {
-    typeMap.set(row.assetType, (typeMap.get(row.assetType) ?? 0) + row.amount);
+    const cat = consolidateAssetType(row.assetType);
+    typeMap.set(cat, (typeMap.get(cat) ?? 0) + row.amount);
   }
 
   const result = [...typeMap.entries()]
     .map(([category, amount]) => ({ category, amount }))
-    .filter((c) => c.amount > 0);
+    .filter((c) => c.amount > 0 && c.category !== "その他");
 
   const zaimBank = getZaimDailyBankTotal(latest.date, db);
-  if (zaimBank > 0) {
-    result.push({ category: "銀行・現金", amount: zaimBank });
-  }
+  if (zaimBank > 0) result.push({ category: "現金", amount: zaimBank });
+
+  const zaimPoints = getZaimPointTotal(db);
+  if (zaimPoints > 0) result.push({ category: "ポイント", amount: zaimPoints });
 
   return result.sort((a, b) => b.amount - a.amount);
 }
@@ -115,7 +126,7 @@ export function getCategoryChangesForPeriod(
     return rf + getZaimDailyBankTotal(date, db);
   };
 
-  const getCategories = (snapshotId: number) => {
+  const getCategories = (snapshotId: number, date: string) => {
     const rows = db
       .select({
         assetType: schema.rfHoldings.assetType,
@@ -127,20 +138,20 @@ export function getCategoryChangesForPeriod(
       .all();
     const map = new Map<string, number>();
     for (const r of rows) {
-      map.set(r.assetType, (map.get(r.assetType) ?? 0) + r.amount);
+      const cat = consolidateAssetType(r.assetType);
+      if (cat !== "その他") map.set(cat, (map.get(cat) ?? 0) + r.amount);
     }
+    const bank = getZaimDailyBankTotal(date, db);
+    if (bank > 0) map.set("現金", bank);
+    const points = getZaimPointTotal(db);
+    if (points > 0) map.set("ポイント", points);
     return map;
   };
 
   const currentTotal = getTotal(latestSnap.id, latestSnap.date);
   const previousTotal = getTotal(prevSnap.id, prevSnap.date);
-  const latestCats = getCategories(latestSnap.id);
-  const previousCats = getCategories(prevSnap.id);
-
-  const latestZaim = getZaimDailyBankTotal(latestSnap.date, db);
-  const prevZaim = getZaimDailyBankTotal(prevSnap.date, db);
-  if (latestZaim > 0) latestCats.set("銀行・現金", latestZaim);
-  if (prevZaim > 0) previousCats.set("銀行・現金", prevZaim);
+  const latestCats = getCategories(latestSnap.id, latestSnap.date);
+  const previousCats = getCategories(prevSnap.id, prevSnap.date);
 
   const allKeys = new Set([...latestCats.keys(), ...previousCats.keys()]);
   const categories = [...allKeys]
@@ -188,14 +199,18 @@ export function getAssetHistoryWithCategories(
     const categories: Record<string, number> = {};
     let rfTotal = 0;
     for (const r of rows) {
-      categories[r.assetType] = (categories[r.assetType] ?? 0) + r.amount;
+      const cat = consolidateAssetType(r.assetType);
+      if (cat !== "その他") {
+        categories[cat] = (categories[cat] ?? 0) + r.amount;
+      }
       rfTotal += r.amount;
     }
 
     const zaimBank = getZaimDailyBankTotal(snap.date, db);
-    if (zaimBank > 0) {
-      categories["銀行・現金"] = zaimBank;
-    }
+    if (zaimBank > 0) categories["現金"] = zaimBank;
+
+    const zaimPoints = getZaimPointTotal(db);
+    if (zaimPoints > 0) categories["ポイント"] = zaimPoints;
 
     return {
       date: snap.date,

@@ -6,7 +6,7 @@ const ASSET_CATEGORY_VAR_MAP: Record<string, string> = {
   保険: "--color-asset-insurance",
   年金: "--color-asset-pension",
   "ポイント・マイル": "--color-asset-point",
-  // ロボフォリオ資産タイプ
+  // ロボフォリオ資産タイプ（個別）
   株式: "--color-asset-stock",
   "株式(NISA)": "--color-asset-stock-nisa",
   "投資信託(NISA)": "--color-asset-fund-nisa",
@@ -14,6 +14,10 @@ const ASSET_CATEGORY_VAR_MAP: Record<string, string> = {
   "外国株(NISA)": "--color-asset-foreign-nisa",
   信用: "--color-asset-margin",
   "銀行・現金": "--color-asset-deposit",
+  // 集約カテゴリ（資産構成円グラフ用）
+  現金: "--color-asset-deposit",
+  個別株: "--color-asset-stock",
+  ポイント: "--color-asset-point",
 };
 
 export function getAssetCategoryColor(name: string): string {
