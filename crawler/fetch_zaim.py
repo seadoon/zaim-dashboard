@@ -203,6 +203,12 @@ def upsert_account_balances(conn: sqlite3.Connection, accounts: list[dict]) -> i
     now = datetime.now().isoformat()
     today = date.today().isoformat()
 
+    # category列が無い既存DBに対応（マイグレーション）
+    try:
+        conn.execute("ALTER TABLE zaim_account_balances ADD COLUMN category TEXT")
+    except Exception:
+        pass
+
     conn.execute("DELETE FROM zaim_account_balances")
     sql = "INSERT INTO zaim_account_balances (account_name, balance, category, updated_at) VALUES (?, ?, ?, ?)"
     for a in accounts:
