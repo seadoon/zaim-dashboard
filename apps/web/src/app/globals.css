@@ -56,7 +56,12 @@
   /* === Asset category colors === */
   --color-asset-deposit: #0e7490; /* 本家: #2881d7 */
   --color-asset-stock: #dd3121; /* 本家: #df3727 */
+  --color-asset-stock-nisa: #f27563;
   --color-asset-fund: #c45505; /* 本家: #fcad4c */
+  --color-asset-fund-nisa: #e8924a;
+  --color-asset-foreign: #0369a1;
+  --color-asset-foreign-nisa: #0891b2;
+  --color-asset-margin: #475569;
   --color-asset-insurance: #be185d; /* 本家: #ff689a */
   --color-asset-pension: #008381; /* 本家: #008986 */
   --color-asset-point: #9c39b6;

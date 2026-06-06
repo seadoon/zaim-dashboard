@@ -1,10 +1,19 @@
 const ASSET_CATEGORY_VAR_MAP: Record<string, string> = {
+  // MF旧カテゴリ
   "預金・現金・暗号資産": "--color-asset-deposit",
   "株式(現物)": "--color-asset-stock",
   投資信託: "--color-asset-fund",
   保険: "--color-asset-insurance",
   年金: "--color-asset-pension",
   "ポイント・マイル": "--color-asset-point",
+  // ロボフォリオ資産タイプ
+  株式: "--color-asset-stock",
+  "株式(NISA)": "--color-asset-stock-nisa",
+  "投資信託(NISA)": "--color-asset-fund-nisa",
+  外国株: "--color-asset-foreign",
+  "外国株(NISA)": "--color-asset-foreign-nisa",
+  信用: "--color-asset-margin",
+  "銀行・現金": "--color-asset-deposit",
 };
 
 export function getAssetCategoryColor(name: string): string {

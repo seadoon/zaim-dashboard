@@ -142,8 +142,13 @@ def scrape_account_balances(driver) -> list[dict]:
         accs = pair_data.get("accounts", [])
         vals = pair_data.get("values", [])
         log.info("口座数: %d  value数: %d", len(accs), len(vals))
+        # window.Accounts の構造を確認するためのデバッグログ
+        if accs:
+            log.info("Accounts[0] keys: %s", list(accs[0].keys()))
+            log.info("Accounts sample: %s", json.dumps(accs[:5], ensure_ascii=False))
         pairs = [
-            {"name": a.get("name", ""), "text": v.get("text", ""), "cls": v.get("cls", "")}
+            {"name": a.get("name", ""), "text": v.get("text", ""), "cls": v.get("cls", ""),
+             "acc": a}
             for a, v in zip(accs, vals)
         ]
 
@@ -158,13 +163,21 @@ def scrape_account_balances(driver) -> list[dict]:
                 return None
 
         # 銀行口座 (value plus = 正の残高) のみ個別保存
+        # カード口座 (value minus = 未払い残高) も個別保存
         bank_accounts: list[dict] = []
+        card_accounts: list[dict] = []
         for p in pairs:
-            if "plus" in p.get("cls", ""):
-                amount = parse_yen(p["text"])
-                if amount is not None and amount > 0:
-                    bank_accounts.append({"account_name": p["name"], "balance": amount, "category": "銀行"})
-                    log.info("  銀行: %s → %d", p["name"], amount)
+            cls = p.get("cls", "")
+            name = p.get("name", "")
+            amount = parse_yen(p["text"])
+            if not name or amount is None:
+                continue
+            if "plus" in cls and amount > 0:
+                bank_accounts.append({"account_name": name, "balance": amount, "category": "銀行"})
+                log.info("  銀行: %s → %d", name, amount)
+            elif "minus" in cls:
+                card_accounts.append({"account_name": name, "balance": amount, "category": "カード"})
+                log.info("  カード: %s → %d", name, amount)
 
         # window.assets の 銀行 合計と突合確認
         asset_bank_total = next(
@@ -181,10 +194,20 @@ def scrape_account_balances(driver) -> list[dict]:
             if asset_bank_total > 0:
                 accounts.append({"account_name": "銀行", "balance": asset_bank_total, "category": "銀行"})
 
-        # 銀行以外のカテゴリを window.assets から保存（マイナス残高のカードも含む）
+        # カード: DOM上で個別口座が取れた場合はそれを使い、それ以外は window.assets のカード合計
+        card_cat_total = next(
+            (int(a.get("amount", 0)) for a in asset_categories if a.get("name") == "カード"), None
+        )
+        if card_accounts:
+            accounts.extend(card_accounts)
+            log.info("カード個別口座: %d 件", len(card_accounts))
+        elif card_cat_total is not None:
+            accounts.append({"account_name": "カード", "balance": card_cat_total, "category": "カード"})
+
+        # 銀行・カード以外のカテゴリを window.assets から保存
         for cat in asset_categories:
             name = cat.get("name", "")
-            if name == "銀行":
+            if name in ("銀行", "カード"):
                 continue
             amount = int(cat.get("amount", 0))
             accounts.append({"account_name": name, "balance": amount, "category": name})
