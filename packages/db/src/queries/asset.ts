@@ -1,4 +1,4 @@
-import { desc, eq, sql, and, notInArray } from "drizzle-orm";
+import { desc, eq, sql, notInArray } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { getZaimDailyBankTotal, getZaimPointTotal } from "./zaim";
 import { getLatestSnapshot } from "./holding";
@@ -96,7 +96,60 @@ export function getLatestTotalAssets(db: Db = getDb()): number | null {
   return rfTotal + zaimBank;
 }
 
-/** 前日比・週比・月比の変化を計算 */
+// ── 共通ヘルパー ─────────────────────────────────────────────
+
+function catsFromSnapshot(snapshotId: number, date: string, db: Db): Map<string, number> {
+  const rows = db
+    .select({ assetType: schema.rfHoldings.assetType, amount: schema.rfHoldingValues.amount })
+    .from(schema.rfHoldingValues)
+    .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
+    .where(eq(schema.rfHoldingValues.snapshotId, snapshotId))
+    .all();
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const cat = consolidateAssetType(r.assetType);
+    if (cat !== "その他") map.set(cat, (map.get(cat) ?? 0) + r.amount);
+  }
+  const bank = getZaimDailyBankTotal(date, db);
+  if (bank > 0) map.set("現金", bank);
+  return map;
+}
+
+function totalFromSnapshot(snapshotId: number, date: string, db: Db): number {
+  const rows = db
+    .select({ amount: schema.rfHoldingValues.amount })
+    .from(schema.rfHoldingValues)
+    .where(eq(schema.rfHoldingValues.snapshotId, snapshotId))
+    .all();
+  return rows.reduce((sum, r) => sum + r.amount, 0) + getZaimDailyBankTotal(date, db);
+}
+
+function catsFromHistory(date: string, db: Db): Map<string, number> {
+  const rows = db
+    .select()
+    .from(schema.rfAssetHistory)
+    .where(eq(schema.rfAssetHistory.date, date))
+    .all();
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const cat = consolidateAssetType(r.assetType);
+    if (cat !== "その他") map.set(cat, (map.get(cat) ?? 0) + r.amount);
+  }
+  const bank = getZaimDailyBankTotal(date, db);
+  if (bank > 0) map.set("現金", bank);
+  return map;
+}
+
+function totalFromHistory(date: string, db: Db): number {
+  const rows = db
+    .select({ amount: schema.rfAssetHistory.amount })
+    .from(schema.rfAssetHistory)
+    .where(eq(schema.rfAssetHistory.date, date))
+    .all();
+  return rows.reduce((sum, r) => sum + r.amount, 0) + getZaimDailyBankTotal(date, db);
+}
+
+/** 前日比・週比・月比の変化を計算（rf_snapshotsになければrf_asset_historyにフォールバック） */
 export function getCategoryChangesForPeriod(
   period: "daily" | "weekly" | "monthly",
   db: Db = getDb(),
@@ -106,52 +159,39 @@ export function getCategoryChangesForPeriod(
 
   const targetDateStr = calculateTargetDate(latestSnap.date, period);
 
+  const currentTotal = totalFromSnapshot(latestSnap.id, latestSnap.date, db);
+  const latestCats = catsFromSnapshot(latestSnap.id, latestSnap.date, db);
+
+  // Previous: try rf_snapshots first
+  let previousTotal: number;
+  let previousCats: Map<string, number>;
+
   const prevSnap = db
     .select()
     .from(schema.rfSnapshots)
-    .where(and(sql`${schema.rfSnapshots.date} <= ${targetDateStr}`))
+    .where(sql`${schema.rfSnapshots.date} <= ${targetDateStr}`)
     .orderBy(desc(schema.rfSnapshots.date))
     .limit(1)
     .get();
 
-  if (!prevSnap || prevSnap.date === latestSnap.date) return null;
+  if (prevSnap && prevSnap.date !== latestSnap.date) {
+    previousTotal = totalFromSnapshot(prevSnap.id, prevSnap.date, db);
+    previousCats = catsFromSnapshot(prevSnap.id, prevSnap.date, db);
+  } else {
+    // Fallback: rf_asset_history (backfill data)
+    const histEntry = db
+      .select({ date: schema.rfAssetHistory.date })
+      .from(schema.rfAssetHistory)
+      .where(sql`${schema.rfAssetHistory.date} <= ${targetDateStr}`)
+      .orderBy(desc(schema.rfAssetHistory.date))
+      .limit(1)
+      .get();
 
-  const getTotal = (snapshotId: number, date: string) => {
-    const rows = db
-      .select({ amount: schema.rfHoldingValues.amount })
-      .from(schema.rfHoldingValues)
-      .where(eq(schema.rfHoldingValues.snapshotId, snapshotId))
-      .all();
-    const rf = rows.reduce((sum, r) => sum + r.amount, 0);
-    return rf + getZaimDailyBankTotal(date, db);
-  };
+    if (!histEntry || histEntry.date === latestSnap.date) return null;
 
-  const getCategories = (snapshotId: number, date: string) => {
-    const rows = db
-      .select({
-        assetType: schema.rfHoldings.assetType,
-        amount: schema.rfHoldingValues.amount,
-      })
-      .from(schema.rfHoldingValues)
-      .innerJoin(schema.rfHoldings, eq(schema.rfHoldingValues.holdingId, schema.rfHoldings.id))
-      .where(eq(schema.rfHoldingValues.snapshotId, snapshotId))
-      .all();
-    const map = new Map<string, number>();
-    for (const r of rows) {
-      const cat = consolidateAssetType(r.assetType);
-      if (cat !== "その他") map.set(cat, (map.get(cat) ?? 0) + r.amount);
-    }
-    const bank = getZaimDailyBankTotal(date, db);
-    if (bank > 0) map.set("現金", bank);
-    const points = getZaimPointTotal(db);
-    if (points > 0) map.set("ポイント", points);
-    return map;
-  };
-
-  const currentTotal = getTotal(latestSnap.id, latestSnap.date);
-  const previousTotal = getTotal(prevSnap.id, prevSnap.date);
-  const latestCats = getCategories(latestSnap.id, latestSnap.date);
-  const previousCats = getCategories(prevSnap.id, prevSnap.date);
+    previousTotal = totalFromHistory(histEntry.date, db);
+    previousCats = catsFromHistory(histEntry.date, db);
+  }
 
   const allKeys = new Set([...latestCats.keys(), ...previousCats.keys()]);
   const categories = [...allKeys]
@@ -208,8 +248,6 @@ export function getAssetHistoryWithCategories(
 
     const zaimBank = getZaimDailyBankTotal(snap.date, db);
     if (zaimBank > 0) categories["現金"] = zaimBank;
-    const zaimPoints = getZaimPointTotal(db);
-    if (zaimPoints > 0) categories["ポイント"] = zaimPoints;
 
     return { date: snap.date, totalAssets: rfTotal + zaimBank, categories };
   });
@@ -233,11 +271,9 @@ export function getAssetHistoryWithCategories(
     entry.rfTotal += row.amount;
   }
 
-  const zaimPoints = getZaimPointTotal(db);
   const historyResults = [...historyByDate.entries()].map(([date, { categories, rfTotal }]) => {
     const zaimBank = getZaimDailyBankTotal(date, db);
     if (zaimBank > 0) categories["現金"] = zaimBank;
-    if (zaimPoints > 0) categories["ポイント"] = zaimPoints;
     return { date, totalAssets: rfTotal + zaimBank, categories };
   });
 
