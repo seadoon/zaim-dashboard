@@ -41,6 +41,30 @@ function detectAssetTypeFromClass(rowClass: string): string {
   return "その他";
 }
 
+export async function triggerCrawlIfReady(page: Page): Promise<void> {
+  info("Navigating to portfolio page to check crawling button...");
+  await page.goto(rfUrls.portfolio, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForLoadState("networkidle").catch(() => {});
+
+  const btn = page.locator("#crawling-btn");
+  const status = await btn.getAttribute("data-status").catch(() => null);
+  info(`#crawling-btn data-status="${status}"`);
+
+  if (status !== "1") {
+    info("Crawling not needed (already running or recently completed)");
+    return;
+  }
+
+  info("Clicking crawling button...");
+  await btn.click();
+
+  await page.locator(".icon-crawling").waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
+  info("Crawling started, waiting for completion...");
+
+  await page.locator(".icon-crawling").waitFor({ state: "hidden", timeout: 300000 });
+  info("Crawl complete");
+}
+
 export async function scrapeHoldings(page: Page): Promise<RfHoldingInput[]> {
   log("Navigating to portfolio page...");
   await page.goto(rfUrls.portfolio, { waitUntil: "domcontentloaded", timeout: 30000 });

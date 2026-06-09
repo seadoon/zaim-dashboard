@@ -14,7 +14,7 @@ import { saveRobofolioData } from "@moneyforward-daily-action/db";
 import path from "node:path";
 import { chromium } from "playwright";
 import { loginToRobofolio } from "./auth/robofolio-login.js";
-import { scrapeHoldings } from "./scrapers/robofolio-holdings.js";
+import { scrapeHoldings, triggerCrawlIfReady } from "./scrapers/robofolio-holdings.js";
 import { backfillAssetHistory } from "./scrapers/robofolio-backfill.js";
 import { sendDiscordNotification, sendDiscordErrorNotification } from "./discord.js";
 import { log, info, error, section } from "./logger.js";
@@ -34,6 +34,9 @@ async function main() {
   try {
     section("Login");
     await loginToRobofolio(page);
+
+    section("Crawl");
+    await triggerCrawlIfReady(page);
 
     section("Scrape");
     const holdings = await scrapeHoldings(page);
