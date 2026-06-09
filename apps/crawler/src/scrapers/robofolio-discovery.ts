@@ -36,6 +36,36 @@ async function dumpPage(page: import("playwright").Page, name: string) {
   }
 }
 
+async function tryCrawlingButton(page: import("playwright").Page) {
+  info("Checking crawling button...");
+  const btn = page.locator("#crawling-btn");
+  const status = await btn.getAttribute("data-status").catch(() => null);
+  info(`  #crawling-btn data-status="${status}"`);
+
+  if (status !== "1") {
+    info("  Button not ready (already crawling or unavailable). Skipping.");
+    return;
+  }
+
+  info("  Clicking crawling button...");
+  await btn.click();
+  info("  Clicked. Waiting for spinner to appear...");
+
+  // スピナーが表示されるまで待つ
+  await page.locator(".icon-crawling").waitFor({ state: "visible", timeout: 10000 }).catch(() => {
+    info("  Spinner never appeared - may have completed instantly");
+  });
+
+  info("  Spinner visible. Waiting for crawl to complete (spinner hidden)...");
+  const start = Date.now();
+  await page.locator(".icon-crawling").waitFor({ state: "hidden", timeout: 300000 });
+  info(`  Crawl complete in ${((Date.now() - start) / 1000).toFixed(1)}s`);
+
+  // 更新後のdata-statusを確認
+  const newStatus = await btn.getAttribute("data-status").catch(() => null);
+  info(`  After crawl: data-status="${newStatus}"`);
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -45,6 +75,12 @@ async function main() {
 
     await loginToRobofolio(page);
     await dumpPage(page, "home");
+
+    info("Testing crawling button on portfolio page...");
+    await page.goto(rfUrls.portfolio, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await tryCrawlingButton(page);
+    await dumpPage(page, "after-crawl");
 
     info("Navigating to portfolio page...");
     await page.goto(rfUrls.portfolio, { waitUntil: "domcontentloaded" });
