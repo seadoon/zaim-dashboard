@@ -4,6 +4,7 @@ import { Lightbulb } from "lucide-react";
 import { InsightsBalanceCard } from "../../components/info/insights-balance-card";
 import { InsightsHealthScoreCard } from "../../components/info/insights-health-score-card";
 import { InsightsInvestmentCard } from "../../components/info/insights-investment-card";
+import { InsightsLiabilityCard } from "../../components/info/insights-liability-card";
 import { InsightsSavingsCard } from "../../components/info/insights-savings-card";
 import { InsightsSpendingCard } from "../../components/info/insights-spending-card";
 import { PageLayout } from "../../components/layout/page-layout";
@@ -43,6 +44,7 @@ export default function InsightsPage() {
         <InsightsBalanceCard metrics={metrics} />
         <InsightsSpendingCard metrics={metrics} />
         <InsightsInvestmentCard metrics={metrics} />
+        <InsightsLiabilityCard metrics={metrics} />
       </div>
     </PageLayout>
   );

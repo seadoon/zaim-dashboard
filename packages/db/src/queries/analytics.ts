@@ -35,6 +35,11 @@ export interface AnalyticsMetrics {
     savingsRate: number;
     trend: Array<{ month: string; income: number; expense: number; balance: number }>;
   };
+  liability: {
+    totalLiabilities: number;
+    byCategory: Array<{ category: string; amount: number; pct: number }>;
+    debtToAssetRatio: number;
+  };
   healthScore: {
     totalScore: number;
     categories: Array<{ name: string; score: number; maxScore: number }>;
@@ -64,6 +69,7 @@ interface CollectedData {
     unrealizedGain: number | null;
     unrealizedGainPct: number | null;
   }>;
+  liabilities: Array<{ name: string; amount: number }>;
   transactions: Array<{
     date: string;
     category: string | null;
@@ -92,6 +98,11 @@ function collectData(db: Db): CollectedData {
     unrealizedGainPct: h.unrealizedGainPct,
   }));
 
+  const cardRows = db.all<{ name: string; balance: number }>(
+    sql`SELECT account_name as name, balance FROM zaim_account_balances WHERE category = 'カード' AND balance < 0`,
+  );
+  const liabilities = cardRows.map((r) => ({ name: r.name, amount: Math.abs(r.balance) }));
+
   const currentMonth = new Date().toISOString().slice(0, 7);
   const transactions = db
     .select({
@@ -110,7 +121,7 @@ function collectData(db: Db): CollectedData {
     .filter((h) => h.date >= dateThreshold)
     .map((h) => ({ date: h.date, totalAssets: h.totalAssets }));
 
-  return { totalAssets, liquidAssets, holdings, transactions, assetHistory };
+  return { totalAssets, liquidAssets, holdings, liabilities, transactions, assetHistory };
 }
 
 function countUniqueMonths(dates: string[]): number {
@@ -237,6 +248,24 @@ function calculateGrowth(data: CollectedData): AnalyticsMetrics["growth"] {
   return { monthlyGrowthRate, projectedAnnualRate: Math.round(annualRate * 1000) / 1000 };
 }
 
+function calculateLiability(data: CollectedData): AnalyticsMetrics["liability"] {
+  const totalLiabilities = data.liabilities.reduce((s, l) => s + l.amount, 0);
+  const byCategoryMap: Record<string, number> = {};
+  for (const l of data.liabilities) {
+    byCategoryMap["クレジットカード"] = (byCategoryMap["クレジットカード"] ?? 0) + l.amount;
+  }
+  const byCategory = Object.entries(byCategoryMap)
+    .map(([category, amount]) => ({
+      category,
+      amount,
+      pct: totalLiabilities > 0 ? Math.round((amount / totalLiabilities) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+  const debtToAssetRatio =
+    data.totalAssets > 0 ? Math.round((totalLiabilities / data.totalAssets) * 1000) / 10 : 0;
+  return { totalLiabilities, byCategory, debtToAssetRatio };
+}
+
 function calculateBalance(data: CollectedData): AnalyticsMetrics["balance"] {
   const byMonth: Record<string, { income: number; expense: number }> = {};
   for (const t of data.transactions) {
@@ -315,8 +344,9 @@ function computeMetrics(data: CollectedData): AnalyticsMetrics {
   const spending = calculateSpending(data);
   const growth = calculateGrowth(data);
   const balance = calculateBalance(data);
-  const healthScore = calculateHealthScore({ savings, investment, spending, growth, balance });
-  return { savings, investment, spending, growth, balance, healthScore };
+  const liability = calculateLiability(data);
+  const healthScore = calculateHealthScore({ savings, investment, spending, growth, balance, liability });
+  return { savings, investment, spending, growth, balance, liability, healthScore };
 }
 
 export function getLatestAnalytics(db: Db = getDb()): AnalyticsReport | null {
@@ -324,6 +354,7 @@ export function getLatestAnalytics(db: Db = getDb()): AnalyticsReport | null {
   if (
     data.totalAssets === 0 &&
     data.holdings.length === 0 &&
+    data.liabilities.length === 0 &&
     data.transactions.length === 0 &&
     data.assetHistory.length === 0
   ) {
