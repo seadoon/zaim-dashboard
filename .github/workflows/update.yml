@@ -1,11 +1,9 @@
 name: Daily Update
 
 on:
-  schedule:
-    # JST 9:00 → UTC 0:00 (平日のみ)
-    - cron: "0 0 * * 1-5"
-    # JST 15:30 → UTC 6:30 (平日のみ)
-    - cron: "30 6 * * 1-5"
+  # スケジュール実行は Cloudflare Workers Cron Triggers (apps/cron-trigger) から
+  # workflow_dispatch で発火させる。GitHub Actions の schedule は最大数時間遅延する
+  # ため使わない。
   workflow_dispatch:
 
 permissions:
@@ -27,18 +25,6 @@ jobs:
           ROBOFOLIO_EMAIL: ${{ secrets.ROBOFOLIO_EMAIL }}
           RUN_TASK: ${{ vars.RUN_TASK }}
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
-            YEAR=$(TZ=Asia/Tokyo date +%Y)
-            IS_HOLIDAY=$(curl -sf "https://holidays-jp.github.io/api/v1/${YEAR}/date.json" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if '${TODAY}' in d else 'false')" \
-              2>/dev/null || echo "false")
-            if [ "$IS_HOLIDAY" = "true" ]; then
-              echo "Skipping: today (${TODAY}) is a Japanese public holiday"
-              echo "should-run=false" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-          fi
           echo "should-run=${{ env.ZAIM_ID != '' && env.ROBOFOLIO_EMAIL != '' && env.RUN_TASK == 'true' }}" >> $GITHUB_OUTPUT
 
   zaim:

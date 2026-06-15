@@ -1,0 +1,16 @@
+name = "zaim-dashboard-cron-trigger"
+main = "src/index.ts"
+compatibility_date = "2026-01-28"
+workers_dev = false
+
+[triggers]
+# JST 9:00 → UTC 0:00 (平日のみ)
+# JST 15:30 → UTC 6:30 (平日のみ)
+crons = ["0 0 * * 1-5", "30 6 * * 1-5"]
+
+[vars]
+GITHUB_OWNER = "seadoon"
+GITHUB_REPO = "zaim-dashboard"
+WORKFLOW_FILE = "update.yml"
+
+# GITHUB_TOKEN は wrangler secret put で登録する
