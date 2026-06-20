@@ -79,8 +79,8 @@ async function main() {
     console.log(`NIKKO_GROUP_CODE: ${GROUP_CODE ? "set" : "NOT SET"}`);
 
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await new Promise((r) => setTimeout(r, 2000));
+    // Vue.js SPA: フォームが描画されるまで待つ
+    await page.locator("form .el-input__inner").first().waitFor({ state: "visible", timeout: 30000 });
     await dumpPage(page, "login");
 
     if (!GROUP_CODE || !MEMBER_CODE || !PASSWORD) {
