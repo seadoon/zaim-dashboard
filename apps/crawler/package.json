@@ -6,6 +6,7 @@
   "scripts": {
     "dev:scrape": "DEBUG=true tsx src/index.ts",
     "dev:discover": "DEBUG=true tsx src/scrapers/robofolio-discovery.ts",
+    "dev:nikko-discover": "tsx src/scrapers/nikko-discovery.ts",
     "start": "tsx src/index.ts",
     "notify": "tsx src/notify.ts",
     "typecheck": "tsc --noEmit"

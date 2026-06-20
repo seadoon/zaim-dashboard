@@ -1,0 +1,33 @@
+name: Nikko Discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node
+
+      - run: pnpm --filter @zaim-dashboard/crawler exec playwright install --with-deps chromium
+
+      - name: Run Nikko discovery
+        working-directory: apps/crawler
+        env:
+          NIKKO_GROUP_CODE: ${{ secrets.NIKKO_GROUP_CODE }}
+          NIKKO_MEMBER_CODE: ${{ secrets.NIKKO_MEMBER_CODE }}
+          NIKKO_PASSWORD: ${{ secrets.NIKKO_PASSWORD }}
+        run: pnpm dev:nikko-discover
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nikko-debug
+          path: apps/crawler/debug/nikko-*
+          retention-days: 3
