@@ -103,8 +103,18 @@ async function main() {
     await page.waitForLoadState("networkidle").catch(() => {});
     await new Promise((r) => setTimeout(r, 3000));
     await dumpPage(page, "after-login");
+    console.log(`URL after login: ${page.url()}`);
 
-    console.log(`\nCurrent URL: ${page.url()}`);
+    // 取扱規程同意画面をスキップ
+    const agreeBtn = page.locator('button:has-text("取扱規程に同意する")');
+    if (await agreeBtn.isVisible()) {
+      console.log("同意画面を検出 → 同意ボタンをクリック");
+      await agreeBtn.click();
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await new Promise((r) => setTimeout(r, 3000));
+      await dumpPage(page, "home");
+      console.log(`URL after agree: ${page.url()}`);
+    }
 
     // API リクエスト保存
     writeFileSync("debug/nikko-api-requests.txt", apiRequests.join("\n"));
