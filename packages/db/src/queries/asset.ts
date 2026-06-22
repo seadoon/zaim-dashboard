@@ -2,6 +2,7 @@ import { desc, eq, sql, notInArray } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 import { getZaimDailyBankTotal, getZaimPointTotal } from "./zaim";
 import { getLatestSnapshot } from "./holding";
+import { getLatestNikkoHolding } from "./nikko";
 
 const STOCK_ASSET_TYPES = new Set(["株式", "株式(NISA)", "外国株", "外国株(NISA)", "信用"]);
 const FUND_ASSET_TYPES = new Set(["投資信託", "投資信託(NISA)"]);
@@ -62,6 +63,12 @@ export function getAssetBreakdownByCategory(db: Db = getDb()) {
     typeMap.set(cat, (typeMap.get(cat) ?? 0) + row.amount);
   }
 
+  // 日興持株会（個別株として合算）
+  const nikko = getLatestNikkoHolding(db);
+  if (nikko?.marketValue) {
+    typeMap.set("個別株", (typeMap.get("個別株") ?? 0) + nikko.marketValue);
+  }
+
   const result = [...typeMap.entries()]
     .map(([category, amount]) => ({ category, amount }))
     .filter((c) => c.amount > 0 && c.category !== "その他");
@@ -93,7 +100,8 @@ export function getLatestTotalAssets(db: Db = getDb()): number | null {
 
   const rfTotal = rows.reduce((sum, r) => sum + r.amount, 0);
   const zaimBank = getZaimDailyBankTotal(latest.date, db);
-  return rfTotal + zaimBank;
+  const nikko = getLatestNikkoHolding(db);
+  return rfTotal + zaimBank + (nikko?.marketValue ?? 0);
 }
 
 // ── 共通ヘルパー ─────────────────────────────────────────────
