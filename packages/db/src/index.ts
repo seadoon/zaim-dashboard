@@ -127,4 +127,5 @@ export * from "./queries/holding";
 export * from "./queries/account";
 export * from "./queries/zaim";
 export * from "./queries/analytics";
+export * from "./queries/nikko";
 export * from "./repositories/save-scraped-data";

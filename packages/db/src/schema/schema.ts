@@ -155,3 +155,18 @@ export const rfHoldingValuesRelations = relations(rfHoldingValues, ({ one }) => 
     references: [rfHoldings.id],
   }),
 }));
+
+// ============================================================================
+// 日興証券 持株会
+// ============================================================================
+
+export const nikkoHoldings = sqliteTable("nikko_holdings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  fetchedAt: text("fetched_at").notNull(),   // ISO8601 取得日時
+  stockCode: text("stock_code").notNull(),   // 銘柄コード
+  stockName: text("stock_name").notNull(),   // 銘柄名
+  shares: real("shares").notNull(),          // 保有株数（小数あり）
+  avgCostPrice: integer("avg_cost_price").notNull(), // 平均取得単価（円）
+  totalContribution: integer("total_contribution").notNull(), // 拠出金累計（円）
+  totalIncentive: integer("total_incentive").notNull(),       // 奨励金累計（円）
+});

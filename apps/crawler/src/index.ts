@@ -16,6 +16,7 @@ import { chromium } from "playwright";
 import { loginToRobofolio } from "./auth/robofolio-login.js";
 import { scrapeHoldings, triggerCrawlIfReady } from "./scrapers/robofolio-holdings.js";
 import { backfillAssetHistory } from "./scrapers/robofolio-backfill.js";
+import { scrapeNikkoHoldings } from "./scrapers/nikko-holdings.js";
 import { sendDiscordNotification, sendDiscordErrorNotification } from "./discord.js";
 import { log, info, error, section } from "./logger.js";
 
@@ -48,6 +49,9 @@ async function main() {
 
     section("Backfill");
     await backfillAssetHistory(page, db);
+
+    section("Nikko");
+    await scrapeNikkoHoldings();
     log("Data saved to DB");
 
     section("Notification");
