@@ -169,4 +169,6 @@ export const nikkoHoldings = sqliteTable("nikko_holdings", {
   avgCostPrice: integer("avg_cost_price").notNull(), // 平均取得単価（円）
   totalContribution: integer("total_contribution").notNull(), // 拠出金累計（円）
   totalIncentive: integer("total_incentive").notNull(),       // 奨励金累計（円）
+  currentPrice: real("current_price"),       // 現在株価（円、Yahoo Financeから取得）
+  marketValue: integer("market_value"),      // 評価額（円 = shares × currentPrice）
 });

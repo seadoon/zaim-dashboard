@@ -15,15 +15,22 @@ export interface NikkoBalanceResponse {
   sSyoreiKinRuik: string;
 }
 
-export function saveNikkoHolding(data: NikkoBalanceResponse, db: Db = getDb()): void {
+export function saveNikkoHolding(
+  data: NikkoBalanceResponse,
+  currentPrice: number | null = null,
+  db: Db = getDb(),
+): void {
+  const shares = parseJpNumber(data.sMotibnKbsu);
   db.insert(nikkoHoldings).values({
     fetchedAt: new Date().toISOString(),
     stockCode: data.sMeigaraCd,
     stockName: data.sMeignmRyakKnj,
-    shares: parseJpNumber(data.sMotibnKbsu),
+    shares,
     avgCostPrice: parseJpNumber(data.sAvSyutkTnka),
     totalContribution: parseJpNumber(data.sKystKingkRuik),
     totalIncentive: parseJpNumber(data.sSyoreiKinRuik),
+    currentPrice,
+    marketValue: currentPrice !== null ? Math.round(shares * currentPrice) : null,
   }).run();
 }
 

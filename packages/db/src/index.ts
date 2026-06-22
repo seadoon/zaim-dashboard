@@ -127,6 +127,9 @@ export function initDb() {
       total_incentive    INTEGER NOT NULL
     )
   `);
+  // Add valuation columns if missing (existing DBs won't have them)
+  try { sqlite.exec(`ALTER TABLE nikko_holdings ADD COLUMN current_price REAL`); } catch {}
+  try { sqlite.exec(`ALTER TABLE nikko_holdings ADD COLUMN market_value INTEGER`); } catch {}
 
   return db;
 }
