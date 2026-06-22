@@ -1,6 +1,6 @@
 import { desc } from "drizzle-orm";
-import { getDb, type Db } from "../index.js";
-import { nikkoHoldings } from "../schema/schema.js";
+import { getDb, type Db } from "../index";
+import { nikkoHoldings } from "../schema/schema";
 
 function parseJpNumber(s: string): number {
   return Number(s.replace(/,/g, ""));
