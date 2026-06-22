@@ -104,6 +104,9 @@ jobs:
         env:
           ROBOFOLIO_EMAIL: ${{ secrets.ROBOFOLIO_EMAIL }}
           ROBOFOLIO_PASSWORD: ${{ secrets.ROBOFOLIO_PASSWORD }}
+          NIKKO_GROUP_CODE: ${{ secrets.NIKKO_GROUP_CODE }}
+          NIKKO_MEMBER_CODE: ${{ secrets.NIKKO_MEMBER_CODE }}
+          NIKKO_PASSWORD: ${{ secrets.NIKKO_PASSWORD }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
