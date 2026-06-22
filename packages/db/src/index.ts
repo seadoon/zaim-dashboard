@@ -114,6 +114,20 @@ export function initDb() {
   // Add category column if missing (existing DBs won't have it)
   try { sqlite.exec(`ALTER TABLE zaim_account_balances ADD COLUMN category TEXT`); } catch {}
 
+  // Ensure nikko_holdings exists (crawler runs before deploy migration step)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS nikko_holdings (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      fetched_at         TEXT NOT NULL,
+      stock_code         TEXT NOT NULL,
+      stock_name         TEXT NOT NULL,
+      shares             REAL NOT NULL,
+      avg_cost_price     INTEGER NOT NULL,
+      total_contribution INTEGER NOT NULL,
+      total_incentive    INTEGER NOT NULL
+    )
+  `);
+
   return db;
 }
 
