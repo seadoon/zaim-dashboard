@@ -50,8 +50,23 @@ async function main() {
     section("Backfill");
     await backfillAssetHistory(page, db);
 
+    // 日興持株会は二次的データ（月1回の拠出でめったに変わらない）。
+    // ここでの失敗が robofolio 本体の DB 保存・R2 アップロード・デプロイを
+    // 巻き込まないよう、独立した try/catch で隔離する。失敗時は Discord に
+    // 通知するが処理は継続し、前回保存値をそのまま使う。
     section("Nikko");
-    await scrapeNikkoHoldings();
+    try {
+      await scrapeNikkoHoldings();
+    } catch (nikkoErr) {
+      error("Nikko scraping failed (non-fatal, continuing):", nikkoErr);
+      if (nikkoErr instanceof Error) {
+        try {
+          await sendDiscordErrorNotification(nikkoErr);
+        } catch (notifyErr) {
+          error("Failed to send Nikko error notification:", notifyErr);
+        }
+      }
+    }
     log("Data saved to DB");
 
     section("Notification");
