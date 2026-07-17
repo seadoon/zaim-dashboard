@@ -51,7 +51,18 @@ async function main() {
     await backfillAssetHistory(page, db);
 
     section("Nikko");
-    await scrapeNikkoHoldings();
+    // 日興のサイトは夜間メンテナンス等で失敗しやすい。robofolio分のデータまで
+    // 破棄されないよう、失敗しても通知だけ送って処理を続行する。
+    try {
+      await scrapeNikkoHoldings();
+    } catch (err) {
+      error("Nikko scraping failed (non-fatal):", err);
+      if (err instanceof Error) {
+        await sendDiscordErrorNotification(err).catch((notifyErr) => {
+          error("Failed to send error notification:", notifyErr);
+        });
+      }
+    }
     log("Data saved to DB");
 
     section("Notification");

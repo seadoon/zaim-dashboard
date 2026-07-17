@@ -3,6 +3,23 @@ interface Env {
   GITHUB_OWNER: string;
   GITHUB_REPO: string;
   WORKFLOW_FILE: string;
+  // 任意。設定すると dispatch 失敗時に Discord へ通知する
+  DISCORD_WEBHOOK_URL?: string;
+}
+
+async function notifyDispatchFailure(env: Env, detail: string): Promise<void> {
+  if (!env.DISCORD_WEBHOOK_URL) return;
+  try {
+    await fetch(env.DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: `⚠️ **cron-trigger: workflow_dispatch 失敗**\n\`\`\`\n${detail.slice(0, 1800)}\n\`\`\`\nGITHUB_TOKEN の期限切れの可能性があります。新しい PAT を発行して \`wrangler secret put GITHUB_TOKEN\` で更新してください。`,
+      }),
+    });
+  } catch (e) {
+    console.error("Failed to send Discord notification:", e);
+  }
 }
 
 async function isJapaneseHoliday(date: Date): Promise<boolean> {
@@ -45,7 +62,9 @@ export default {
         }
         const res = await dispatchWorkflow(env);
         if (!res.ok) {
-          console.error(`workflow_dispatch failed: ${res.status} ${await res.text()}`);
+          const detail = `${res.status} ${await res.text()}`;
+          console.error(`workflow_dispatch failed: ${detail}`);
+          await notifyDispatchFailure(env, detail);
         } else {
           console.log("workflow_dispatch succeeded");
         }
