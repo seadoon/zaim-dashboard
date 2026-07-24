@@ -6,7 +6,9 @@ workers_dev = false
 [triggers]
 # JST 9:05 → UTC 0:05 (平日のみ)
 # JST 15:30 → UTC 6:30 (平日のみ)
-crons = ["5 0 * * 1-5", "30 6 * * 1-5"]
+# Cloudflare Workers の cron は day-of-week の数値表記が Sun=1..Sat=7 と1日ずれるため、
+# MON-FRI の名前表記を使う（"1-5" と書くと日〜木で動き、金曜が発火しない）
+crons = ["5 0 * * MON-FRI", "30 6 * * MON-FRI"]
 
 [vars]
 GITHUB_OWNER = "seadoon"
