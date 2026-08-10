@@ -1,14 +1,13 @@
 import {
   initDb,
   closeDb,
-  getZaimBankTotal,
   getDailyAssetChange,
   getCategoryChangesForPeriod,
   getZaimBankHistory,
-  getRfSecuritiesTotal,
   getRfSecuritiesDailyChange,
   getRfSecuritiesTotalByBroker,
   getRfSecuritiesTotalByType,
+  buildNotificationTotals,
 } from "@moneyforward-daily-action/db";
 import path from "node:path";
 import { sendDiscordNotification } from "./discord.js";
@@ -24,8 +23,7 @@ async function main() {
   const db = initDb();
 
   try {
-    const zaimBankTotal = getZaimBankTotal(db);
-    const rfSecuritiesTotal = getRfSecuritiesTotal(db);
+    const totals = buildNotificationTotals(db);
     const dailyAssetChange = getDailyAssetChange(db);
     const monthlyChanges = getCategoryChangesForPeriod("monthly", db);
     const zaimHistory = getZaimBankHistory({ limit: 2 }, db);
@@ -36,9 +34,7 @@ async function main() {
       zaimHistory.length >= 2 ? zaimHistory[0].total - zaimHistory[1].total : null;
 
     await sendDiscordNotification({
-      totalAssets: zaimBankTotal + rfSecuritiesTotal,
-      zaimBankTotal,
-      rfSecuritiesTotal,
+      ...totals,
       dailyChange: dailyAssetChange?.change ?? null,
       monthlyChange: monthlyChanges?.total.change ?? null,
       monthlyChangePrevious: monthlyChanges?.total.previous ?? null,

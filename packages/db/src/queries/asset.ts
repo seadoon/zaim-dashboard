@@ -1,7 +1,7 @@
 import { desc, eq, sql, notInArray } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
-import { getZaimDailyBankTotal, getZaimPointTotal } from "./zaim";
-import { getLatestSnapshot } from "./holding";
+import { getZaimDailyBankTotal, getZaimPointTotal, getZaimCardTotal } from "./zaim";
+import { getLatestSnapshot, getRfSecuritiesTotal } from "./holding";
 import { getLatestNikkoHolding } from "./nikko";
 
 const STOCK_ASSET_TYPES = new Set(["株式", "株式(NISA)", "外国株", "外国株(NISA)", "信用"]);
@@ -82,12 +82,19 @@ export function getAssetBreakdownByCategory(db: Db = getDb()) {
   return result.sort((a, b) => b.amount - a.amount);
 }
 
-/** robofolioは負債を管理しないため空配列を返す */
-export function getLiabilityBreakdownByCategory(_db: Db = getDb()) {
-  return [] as Array<{ category: string; amount: number }>;
+/** 負債の内訳（Zaimのカード債務。金額は正の値） */
+export function getLiabilityBreakdownByCategory(db: Db = getDb()) {
+  const cardTotal = -getZaimCardTotal(db);
+  if (cardTotal <= 0) return [] as Array<{ category: string; amount: number }>;
+  return [{ category: "カード", amount: cardTotal }];
 }
 
-/** 最新の総資産（証券 + Zaim銀行） */
+/**
+ * 最新の総資産（証券 + 日興持株会 + Zaim銀行 + ポイント）。
+ * 負債は含まない資産サイドの合計で、構成比の分母に使う。
+ * 証券口座の預り金は主にSBI新生銀行のハイブリッド預金で、Zaim銀行残高と二重計上に
+ * なるため意図的に除外している（rf_holding_values には元から預り金が入らない）。
+ */
 export function getLatestTotalAssets(db: Db = getDb()): number | null {
   const latest = getLatestSnapshot(db);
   if (!latest) return null;
@@ -101,7 +108,43 @@ export function getLatestTotalAssets(db: Db = getDb()): number | null {
   const rfTotal = rows.reduce((sum, r) => sum + r.amount, 0);
   const zaimBank = getZaimDailyBankTotal(latest.date, db);
   const nikko = getLatestNikkoHolding(db);
-  return rfTotal + zaimBank + (nikko?.marketValue ?? 0);
+  return rfTotal + zaimBank + (nikko?.marketValue ?? 0) + getZaimPointTotal(db);
+}
+
+/**
+ * 最新の純資産（総資産 - カード債務）。
+ * ダッシュボードとDiscord通知の見出し金額はどちらもこの値を使う。
+ */
+export function getLatestNetWorth(db: Db = getDb()): number | null {
+  const totalAssets = getLatestTotalAssets(db);
+  if (totalAssets === null) return null;
+  return totalAssets + getZaimCardTotal(db);
+}
+
+/**
+ * Discord通知の見出し・内訳に出す金額を一括で組み立てる。
+ * crawler の index.ts と notify.ts が同じ数字を出すよう、計算はここに集約する。
+ * 内訳（証券 + 日興 + 銀行 + ポイント + カード債務）の合計が netWorth に一致する。
+ */
+export function buildNotificationTotals(db: Db = getDb()) {
+  const latest = getLatestSnapshot(db);
+  const zaimBankTotal = latest ? getZaimDailyBankTotal(latest.date, db) : 0;
+  const zaimPointTotal = getZaimPointTotal(db);
+  const zaimCardTotal = getZaimCardTotal(db);
+  const nikkoTotal = getLatestNikkoHolding(db)?.marketValue ?? 0;
+  const rfSecuritiesTotal = getRfSecuritiesTotal(db);
+
+  const totalAssets = rfSecuritiesTotal + nikkoTotal + zaimBankTotal + zaimPointTotal;
+
+  return {
+    netWorth: totalAssets + zaimCardTotal,
+    totalAssets,
+    zaimBankTotal,
+    zaimPointTotal,
+    zaimCardTotal,
+    nikkoTotal,
+    rfSecuritiesTotal,
+  };
 }
 
 // ── 共通ヘルパー ─────────────────────────────────────────────
@@ -150,11 +193,17 @@ function catsFromHistory(date: string, db: Db): Map<string, number> {
 
 function totalFromHistory(date: string, db: Db): number {
   const rows = db
-    .select({ amount: schema.rfAssetHistory.amount })
+    .select({ assetType: schema.rfAssetHistory.assetType, amount: schema.rfAssetHistory.amount })
     .from(schema.rfAssetHistory)
     .where(eq(schema.rfAssetHistory.date, date))
     .all();
-  return rows.reduce((sum, r) => sum + r.amount, 0) + getZaimDailyBankTotal(date, db);
+  // rf_asset_history には証券口座の預り金（現金）行が含まれるが、rf_holding_values 由来の
+  // totalFromSnapshot 側には入らない。両者を比較する際の基準を揃えるため現金は除外する。
+  // 除外しないと、フォールバックした比較元だけが預り金の分だけ嵩上げされる。
+  const securities = rows
+    .filter((r) => consolidateAssetType(r.assetType) !== "その他")
+    .reduce((sum, r) => sum + r.amount, 0);
+  return securities + getZaimDailyBankTotal(date, db);
 }
 
 /** 前日比・週比・月比の変化を計算（rf_snapshotsになければrf_asset_historyにフォールバック） */
@@ -275,7 +324,10 @@ export function getAssetHistoryWithCategories(
     if (!historyByDate.has(row.date)) historyByDate.set(row.date, { categories: {}, rfTotal: 0 });
     const entry = historyByDate.get(row.date)!;
     const cat = consolidateAssetType(row.assetType);
-    if (cat !== "その他") entry.categories[cat] = (entry.categories[cat] ?? 0) + row.amount;
+    // 現金（証券口座の預り金）は totalFromHistory と同じ理由で除外する。
+    // 含めるとスナップショット由来の日付との境目でグラフが不連続に跳ねる。
+    if (cat === "その他") continue;
+    entry.categories[cat] = (entry.categories[cat] ?? 0) + row.amount;
     entry.rfTotal += row.amount;
   }
 

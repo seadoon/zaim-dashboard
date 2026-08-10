@@ -46,6 +46,16 @@ export const getAssetBreakdownByCategory = fn(() => []);
 export const getLiabilityBreakdownByCategory = fn(() => []);
 export const getAssetHistoryWithCategories = fn(() => []);
 export const getLatestTotalAssets = fn(() => null);
+export const getLatestNetWorth = fn(() => null);
+export const buildNotificationTotals = fn(() => ({
+  netWorth: 0,
+  totalAssets: 0,
+  zaimBankTotal: 0,
+  zaimPointTotal: 0,
+  zaimCardTotal: 0,
+  nikkoTotal: 0,
+  rfSecuritiesTotal: 0,
+}));
 export const getDailyAssetChange = fn(() => null);
 export const getCategoryChangesForPeriod = fn(() => null);
 
@@ -60,7 +70,9 @@ export const getRfSecuritiesTotal = fn(() => 0);
 export const getRfSecuritiesDailyChange = fn(() => null);
 
 // Query modules - zaim
-export const getZaimBankTotal = fn(() => 0);
+export const getZaimAccountsNetTotal = fn(() => 0);
+export const getZaimCardTotal = fn(() => 0);
+export const getZaimLiabilityItems = fn(() => []);
 export const getZaimBankItems = fn(() => []);
 export const getZaimDailyBankTotal = fn(() => 0);
 export const getZaimBankHistory = fn(() => []);

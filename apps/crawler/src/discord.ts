@@ -107,8 +107,12 @@ function formatPercent(change: number, previous: number): string {
 
 function buildSummaryContent(data: NotificationData): string {
   const {
+    netWorth,
     totalAssets,
     zaimBankTotal,
+    zaimPointTotal,
+    zaimCardTotal,
+    nikkoTotal,
     rfSecuritiesTotal,
     dailyChange,
     monthlyChange,
@@ -127,9 +131,11 @@ function buildSummaryContent(data: NotificationData): string {
   const lines: string[] = [
     "**💰 資産サマリー**",
     "",
-    `**総資産** ${formatAmount(totalAssets)}`,
-    `**前日比** ${dailyChangeText}`,
-    `**今月比** ${monthlyChangeText}`,
+    `**純資産** ${formatAmount(netWorth)}`,
+    // カード債務・ポイントは日次の履歴を持たない（zaim_account_balances は毎回上書き）ため、
+    // 増減は履歴のある証券+銀行のみで算出している。見出しの純資産とは母数が異なる。
+    `**前日比（証券+銀行）** ${dailyChangeText}`,
+    `**今月比（証券+銀行）** ${monthlyChangeText}`,
     "",
     SECTION_DIVIDER,
     "",
@@ -137,6 +143,17 @@ function buildSummaryContent(data: NotificationData): string {
     `銀行・現金（Zaim）: **${formatAmount(zaimBankTotal)}** (${zaimBankDailyChange !== null ? formatChange(zaimBankDailyChange) : "-"})`,
     `証券（robofolio）: **${formatAmount(rfSecuritiesTotal)}** (${rfSecuritiesDailyChange !== null ? formatChange(rfSecuritiesDailyChange) : "-"})`,
   ];
+
+  if (nikkoTotal > 0) {
+    lines.push(`日興持株会: **${formatAmount(nikkoTotal)}**`);
+  }
+  if (zaimPointTotal > 0) {
+    lines.push(`ポイント: **${formatAmount(zaimPointTotal)}**`);
+  }
+  lines.push(`資産合計: **${formatAmount(totalAssets)}**`);
+  if (zaimCardTotal !== 0) {
+    lines.push(`カード債務: **${formatAmount(zaimCardTotal)}**`);
+  }
 
   if (data.rfByBroker.length > 0) {
     for (const b of data.rfByBroker) {

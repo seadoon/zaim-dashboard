@@ -1,7 +1,12 @@
 import { sql, desc, lte } from "drizzle-orm";
 import { getDb, type Db, schema } from "../index";
 
-export function getZaimBankTotal(db: Db = getDb()): number {
+/**
+ * Zaim 連携口座の全カテゴリ合計（銀行 + カード債務 + ポイント等）。
+ * カードは負の残高で入っているため、返り値は債務差し引き後の純額になる。
+ * 銀行のみの残高が欲しい場合は getZaimDailyBankTotal を使うこと。
+ */
+export function getZaimAccountsNetTotal(db: Db = getDb()): number {
   const result = db.get<{ total: number }>(
     sql`SELECT COALESCE(SUM(balance), 0) as total FROM zaim_account_balances`,
   );
@@ -13,6 +18,23 @@ export function getZaimPointTotal(db: Db = getDb()): number {
     sql`SELECT COALESCE(SUM(balance), 0) as total FROM zaim_account_balances WHERE category = 'ポイント'`,
   );
   return result?.total ?? 0;
+}
+
+/** カード債務の合計（負の値で返す。債務がなければ 0） */
+export function getZaimCardTotal(db: Db = getDb()): number {
+  const result = db.get<{ total: number }>(
+    sql`SELECT COALESCE(SUM(balance), 0) as total FROM zaim_account_balances WHERE category = 'カード'`,
+  );
+  return result?.total ?? 0;
+}
+
+/** カード債務の明細（金額は正の値に変換して返す） */
+export function getZaimLiabilityItems(
+  db: Db = getDb(),
+): Array<{ name: string; amount: number }> {
+  return db.all<{ name: string; amount: number }>(
+    sql`SELECT account_name as name, -balance as amount FROM zaim_account_balances WHERE category = 'カード' AND balance < 0 ORDER BY balance ASC`,
+  );
 }
 
 export function getZaimBankItems(db: Db = getDb()): Array<{ name: string; balance: number }> {

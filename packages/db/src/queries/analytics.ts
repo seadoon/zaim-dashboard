@@ -5,7 +5,7 @@ import {
   getLatestTotalAssets,
   getAssetHistoryWithCategories,
 } from "./asset";
-import { getZaimDailyBankTotal } from "./zaim";
+import { getZaimDailyBankTotal, getZaimLiabilityItems } from "./zaim";
 
 export interface AnalyticsMetrics {
   savings: {
@@ -98,10 +98,7 @@ function collectData(db: Db): CollectedData {
     unrealizedGainPct: h.unrealizedGainPct,
   }));
 
-  const cardRows = db.all<{ name: string; balance: number }>(
-    sql`SELECT account_name as name, balance FROM zaim_account_balances WHERE category = 'カード' AND balance < 0`,
-  );
-  const liabilities = cardRows.map((r) => ({ name: r.name, amount: Math.abs(r.balance) }));
+  const liabilities = getZaimLiabilityItems(db);
 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const transactions = db
