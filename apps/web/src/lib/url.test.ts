@@ -1,5 +1,41 @@
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { extractGroupIdFromPath, extractPagePath, buildGroupPath, isNavItemActive } from "./url";
+import {
+  extractGroupIdFromPath,
+  extractPagePath,
+  buildGroupPath,
+  isNavItemActive,
+  NAV_PATHS,
+} from "./url";
+
+describe("NAV_PATHS", () => {
+  // 2026-06-14 に /insights を追加した際 NAV_PATHS への追加が漏れ、insightsページ上で
+  // 全タブのリンクが /insights/<path> に壊れて404になっていた（2026-08-11に発覚）。
+  // NAV_PATHS 自身を走査すると登録漏れを検出できないため、実際のルート定義と突き合わせる。
+  it("app配下の全ページがNAV_PATHSに登録されている", () => {
+    const appDir = join(import.meta.dirname, "../app");
+    const routeDirs = readdirSync(appDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => !name.startsWith("[") && !name.startsWith("_"))
+      .filter((name) => existsSync(join(appDir, name, "page.tsx")));
+
+    expect(routeDirs.length).toBeGreaterThan(0);
+    for (const dir of routeDirs) {
+      expect(NAV_PATHS).toContain(dir);
+    }
+  });
+
+  it("各ページからサイドバーのリンクが自分自身を接頭辞にしない", () => {
+    for (const current of NAV_PATHS) {
+      const groupId = extractGroupIdFromPath(`/${current}/`);
+      for (const target of NAV_PATHS) {
+        expect(buildGroupPath(groupId, target)).toBe(target ? `/${target}` : "/");
+      }
+    }
+  });
+});
 
 describe("extractGroupIdFromPath", () => {
   it("returns null for root path", () => {

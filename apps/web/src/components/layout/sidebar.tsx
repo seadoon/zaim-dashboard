@@ -4,20 +4,30 @@ import type { Route } from "next";
 import { LayoutDashboard, TrendingUp, PiggyBank, Landmark, Calculator, Lightbulb, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { buildGroupPath, extractGroupIdFromPath, isNavItemActive } from "../../lib/url";
+import {
+  buildGroupPath,
+  extractGroupIdFromPath,
+  isNavItemActive,
+  NAV_PATHS,
+  type NavPath,
+} from "../../lib/url";
 import { cn } from "../../lib/utils";
 import { IconButton } from "../ui/icon-button";
 import { ActionIcons } from "./action-icons";
 import { useSidebar } from "./sidebar-context";
 
-const navItems = [
-  { title: "ダッシュボード", path: "", icon: LayoutDashboard },
-  { title: "収支", path: "cf", icon: TrendingUp },
-  { title: "資産", path: "bs", icon: PiggyBank },
-  { title: "連携サービス", path: "accounts", icon: Landmark },
-  { title: "財務インサイト", path: "insights", icon: Lightbulb },
-  { title: "シミュレーター", path: "simulator", icon: Calculator },
-];
+// パスの一覧は lib/url.ts の NAV_PATHS が単一の情報源。ここは表示情報だけを持つ。
+// NAV_PATHS に足したパスをここに書き忘れると型エラーになるため、両者がずれない。
+const NAV_META: Record<NavPath, { title: string; icon: typeof LayoutDashboard }> = {
+  "": { title: "ダッシュボード", icon: LayoutDashboard },
+  cf: { title: "収支", icon: TrendingUp },
+  bs: { title: "資産", icon: PiggyBank },
+  accounts: { title: "連携サービス", icon: Landmark },
+  insights: { title: "財務インサイト", icon: Lightbulb },
+  simulator: { title: "シミュレーター", icon: Calculator },
+};
+
+const navItems = NAV_PATHS.map((path) => ({ path, ...NAV_META[path] }));
 
 export function Sidebar() {
   const { isOpen, close } = useSidebar();

@@ -1,4 +1,20 @@
-const KNOWN_PATHS = ["cf", "bs", "accounts", "simulator"];
+/**
+ * サイドバーに並ぶページのパス（"" はダッシュボード）。
+ * ページを追加するときは必ずここに足すこと。サイドバーの navItems もこの配列から
+ * 組み立てるため、ここに無いページはリンクを張れない（型エラーになる）。
+ */
+export const NAV_PATHS = ["", "cf", "bs", "accounts", "insights", "simulator"] as const;
+
+export type NavPath = (typeof NAV_PATHS)[number];
+
+/**
+ * グループIDと区別するための既知ページパス。
+ * ここに載っていないパスは先頭セグメントがグループIDとみなされ、サイドバーの
+ * 全リンクが /<そのパス>/... という壊れたURLになる。
+ * （2026-06-14 の /insights 追加時にこの更新が漏れ、insightsページ上で全タブが
+ *   404になっていた）
+ */
+const KNOWN_PATHS: readonly string[] = NAV_PATHS.filter((path) => path !== "");
 
 export function extractPagePath(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);
