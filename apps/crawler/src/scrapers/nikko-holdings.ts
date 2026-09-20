@@ -9,6 +9,13 @@ try {
 
 const LOGIN_URL = "https://ald.smbcnikko.co.jp/aldMemberMain.html#/login";
 
+/** 残高照会レスポンスの待機上限。相手サイトが遅い日でも取りこぼさない長さにする */
+const BALANCE_TIMEOUT_MS = 30_000;
+/** 同意画面の出現待ち。出ないまま残高照会が来ることもあるので短めで打ち切る */
+const AGREE_TIMEOUT_MS = 10_000;
+
+const isBalanceInquiry = (url: string): boolean => url.includes("ald-next/balance-inquiry");
+
 interface BalanceData {
   sMotibnKbsu: string;
   sAvSyutkTnka: string;
@@ -54,8 +61,9 @@ export async function scrapeNikkoHoldings(): Promise<void> {
 
   let captured: BalanceData | null = null;
 
+  // レスポンス到達を待ち受ける保険。waitForResponse より先に来た場合も取りこぼさない。
   page.on("response", async (res) => {
-    if (res.url().includes("ald-next/balance-inquiry")) {
+    if (!captured && isBalanceInquiry(res.url())) {
       try {
         captured = (await res.json()) as BalanceData;
       } catch {}
@@ -72,21 +80,36 @@ export async function scrapeNikkoHoldings(): Promise<void> {
     await inputs.nth(0).fill(GROUP_CODE);
     await inputs.nth(1).fill(MEMBER_CODE);
     await inputs.nth(2).fill(PASSWORD);
-    await page.locator('button:has-text("ログインする")').first().click();
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await new Promise((r) => setTimeout(r, 2000));
 
+    // 残高照会レスポンスの待機はログイン操作より前に仕掛ける。
+    // クリック後に仕掛けると、応答が速かったときに取りこぼす。
+    const balanceResponse = page
+      .waitForResponse((res) => isBalanceInquiry(res.url()), { timeout: BALANCE_TIMEOUT_MS })
+      .catch(() => null);
+
+    await page.locator('button:has-text("ログインする")').first().click();
+
+    // 同意画面を挟む場合と、挟まずに残高照会まで進む場合がある。
+    // 固定秒数で待つと相手サイトが少し遅いだけで失敗するため、
+    // 「同意ボタンの出現」か「残高照会の到達」のどちらか早い方まで待つ。
     const agreeBtn = page.locator('button:has-text("取扱規程に同意する")');
-    if (await agreeBtn.isVisible()) {
+    await Promise.race([
+      agreeBtn.waitFor({ state: "visible", timeout: AGREE_TIMEOUT_MS }).catch(() => {}),
+      balanceResponse,
+    ]);
+    if (await agreeBtn.isVisible().catch(() => false)) {
       await agreeBtn.click();
-      await page.waitForLoadState("networkidle").catch(() => {});
-      await new Promise((r) => setTimeout(r, 3000));
     }
 
-    if (!captured) throw new Error("balance-inquiry API response not captured");
+    const res = await balanceResponse;
+    if (!captured && res) {
+      try {
+        captured = (await res.json()) as BalanceData;
+      } catch {}
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const data: BalanceData = captured!;
+    const data: BalanceData | null = captured;
+    if (!data) throw new Error("balance-inquiry API response not captured");
 
     // 現在株価を取得して評価額を計算（取得失敗時は null で保存）
     const price = await fetchCurrentPrice(data.sMeigaraCd);
