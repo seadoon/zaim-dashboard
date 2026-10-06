@@ -19,11 +19,29 @@ async function saveDebug(page: Page, name: string) {
   log(`Debug saved: debug/${name}.png`);
 }
 
+// robofolio 側の一時的な応答遅延で page.goto が 30 秒を超えることがある
+// （2026-10-06 15:34 の Daily Update が 1 回目のナビゲーションだけで失敗）。
+// サイト自体は稼働しているため、少し待って数回やり直す。
+async function gotoLoginWithRetry(page: Page, attempts = 3): Promise<void> {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await page.goto(rfUrls.login, { waitUntil: "domcontentloaded", timeout: 30000 });
+      if (i > 1) info(`Navigation succeeded on attempt ${i}`);
+      return;
+    } catch (err) {
+      if (i === attempts) throw err;
+      const waitMs = i * 10000;
+      log(`Navigation attempt ${i}/${attempts} failed, retrying in ${waitMs / 1000}s: ${String(err)}`);
+      await page.waitForTimeout(waitMs);
+    }
+  }
+}
+
 export async function loginToRobofolio(page: Page): Promise<void> {
   const { loginId, password } = getCredentials();
 
   info("Navigating to robofolio login page...");
-  await page.goto(rfUrls.login, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await gotoLoginWithRetry(page);
   await page.waitForLoadState("networkidle").catch(() => {});
 
   await saveDebug(page, "login-page");
