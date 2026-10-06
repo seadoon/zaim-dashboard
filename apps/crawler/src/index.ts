@@ -25,8 +25,29 @@ try {
   // .env file not found (CI environment)
 }
 
+// robofolio がデータを更新するのは平日 9:00-19:00 (JST) のみ。
+// それ以外の時間に実行しても古い値をそのまま取り込むだけなので、
+// 何もせず正常終了する（手動で動かしたいときは FORCE_RUN=true）。
+function isWithinRobofolioHours(now = new Date()): boolean {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const day = jst.getUTCDay(); // 0=日, 6=土
+  const hour = jst.getUTCHours();
+  return day >= 1 && day <= 5 && hour >= 9 && hour < 19;
+}
+
+function jstNowText(now = new Date()): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 16).replace("T", " ") + " JST";
+}
+
 async function main() {
   section("Setup");
+
+  if (!isWithinRobofolioHours() && process.env.FORCE_RUN !== "true") {
+    info(`robofolio の更新時間外のためスキップします (${jstNowText()} / 稼働は平日 9:00-19:00 JST)`);
+    info("強制的に実行する場合は FORCE_RUN=true を指定してください");
+    return;
+  }
+
   const db = initDb();
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
